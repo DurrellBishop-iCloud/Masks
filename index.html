@@ -536,7 +536,8 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.7</div>
+    <div class="version-tag">v4.8</div>
+    <div id="debugInfo" style="position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;padding:10px;z-index:9999;max-width:90%;"></div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -2701,21 +2702,43 @@
             document.querySelector('.container').classList.toggle('ui-hidden');
         });
 
+        // Debug helper
+        function debug(msg) {
+            const el = document.getElementById('debugInfo');
+            el.innerHTML = msg + '<br>' + el.innerHTML;
+            if (el.innerHTML.length > 500) el.innerHTML = el.innerHTML.substring(0, 500);
+        }
+
         // Tap on screen to go to next mask (only when UI is hidden)
         document.getElementById('tapOverlay').addEventListener('click', async (e) => {
+            debug('TAP detected');
+
             // Only cycle masks when UI is hidden (full screen mode)
-            if (!document.querySelector('.container').classList.contains('ui-hidden')) return;
+            const isHidden = document.querySelector('.container').classList.contains('ui-hidden');
+            debug('UI hidden: ' + isHidden);
+            if (!isHidden) return;
+
+            debug('Gallery: ' + (galleryManifest ? galleryManifest.masks.length + ' masks' : 'null'));
 
             if (!galleryManifest || galleryManifest.masks.length === 0) {
-                // Try loading gallery if not loaded
+                debug('Loading gallery...');
                 await loadGalleryManifest();
             }
 
-            if (!galleryManifest || galleryManifest.masks.length === 0) return;
+            if (!galleryManifest || galleryManifest.masks.length === 0) {
+                debug('No masks available');
+                return;
+            }
 
             // Go to next mask, loop back to start
+            const oldIndex = currentMaskIndex;
             currentMaskIndex = (currentMaskIndex + 1) % galleryManifest.masks.length;
-            await selectGalleryMask(galleryManifest.masks[currentMaskIndex]);
+            debug('Index: ' + oldIndex + ' -> ' + currentMaskIndex);
+
+            const mask = galleryManifest.masks[currentMaskIndex];
+            debug('Loading: ' + (mask ? mask.name : 'undefined'));
+            await selectGalleryMask(mask);
+            debug('Done loading');
         });
 
         // Load a random mask from the gallery
