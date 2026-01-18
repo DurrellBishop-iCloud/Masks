@@ -360,6 +360,7 @@
         }
 
         .gallery-mask-item {
+            position: relative;
             aspect-ratio: 1;
             border-radius: 8px;
             overflow: hidden;
@@ -381,6 +382,30 @@
 
         .gallery-mask-item:hover {
             border-color: #e94560;
+        }
+
+        .gallery-mask-item .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: rgba(255,0,0,0.8);
+            border: none;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+        }
+
+        .gallery-mask-item .delete-btn:active {
+            opacity: 1;
+            background: rgba(255,0,0,1);
         }
 
         .gallery-loading, .gallery-empty {
@@ -511,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.0</div>
+    <div class="version-tag">v4.1</div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -1512,10 +1537,104 @@
             galleryManifest.masks.forEach(mask => {
                 const item = document.createElement('div');
                 item.className = 'gallery-mask-item';
-                item.innerHTML = `<img src="${mask.image}" alt="${mask.name}">`;
-                item.addEventListener('click', () => selectGalleryMask(mask));
+                item.innerHTML = `
+                    <img src="${mask.image}" alt="${mask.name}">
+                    <button class="delete-btn" data-mask-id="${mask.id}">&times;</button>
+                `;
+
+                // Click on image selects the mask
+                item.querySelector('img').addEventListener('click', () => selectGalleryMask(mask));
+
+                // Click on delete button deletes the mask
+                item.querySelector('.delete-btn').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deleteMask(mask);
+                });
+
                 grid.appendChild(item);
             });
+        }
+
+        async function deleteMask(mask) {
+            // Confirm deletion
+            if (!confirm(`Delete "${mask.name}"?\n\nThis will permanently remove the mask from the gallery.`)) {
+                return;
+            }
+
+            const token = localStorage.getItem('github_token');
+            if (!token) {
+                alert('GitHub token required to delete masks');
+                return;
+            }
+
+            try {
+                // Show deleting status
+                const countEl = document.getElementById('maskCount');
+                countEl.textContent = '(deleting...)';
+
+                // Get the SHA of the image file to delete it
+                const imageResponse = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/${mask.image}`,
+                    { headers: { 'Authorization': `token ${token}` } }
+                );
+
+                if (imageResponse.ok) {
+                    const imageData = await imageResponse.json();
+
+                    // Delete the image file
+                    await fetch(
+                        `https://api.github.com/repos/${GITHUB_REPO}/contents/${mask.image}`,
+                        {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `token ${token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                message: `Delete mask: ${mask.name}`,
+                                sha: imageData.sha
+                            })
+                        }
+                    );
+                }
+
+                // Get current manifest and remove this mask
+                const manifestResponse = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    { headers: { 'Authorization': `token ${token}` } }
+                );
+                const manifestData = await manifestResponse.json();
+                const currentManifest = JSON.parse(atob(manifestData.content));
+
+                // Remove the mask from the array
+                currentManifest.masks = currentManifest.masks.filter(m => m.id !== mask.id);
+
+                // Update manifest on GitHub
+                await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    {
+                        method: 'PUT',
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            message: `Remove mask from gallery: ${mask.name}`,
+                            content: btoa(JSON.stringify(currentManifest, null, 2)),
+                            sha: manifestData.sha
+                        })
+                    }
+                );
+
+                // Reload gallery
+                await loadGalleryManifest();
+                renderGallery();
+
+            } catch (error) {
+                console.error('Failed to delete mask:', error);
+                alert('Failed to delete mask: ' + error.message);
+                renderGallery();
+            }
         }
 
         async function selectGalleryMask(maskData) {
