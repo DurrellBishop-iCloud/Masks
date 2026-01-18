@@ -480,11 +480,39 @@
             pointer-events: none;
             z-index: 1000;
         }
+
+        .gear-btn {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.5);
+            border: none;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .gear-btn:active {
+            background: rgba(0,0,0,0.7);
+        }
+
+        .ui-hidden .tabs,
+        .ui-hidden .controls,
+        .ui-hidden .version-tag {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.9</div>
-    <div class="container">
+    <button class="gear-btn" id="gearBtn">&#9881;</button>
+    <div class="version-tag">v4.0</div>
+    <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
             <button class="tab active" data-view="track">Face Track</button>
@@ -2547,6 +2575,25 @@
             if (trackCanvas && isTracking) resizeTrackCanvas();
         });
 
+        // Gear button toggles UI visibility
+        document.getElementById('gearBtn').addEventListener('click', () => {
+            document.querySelector('.container').classList.toggle('ui-hidden');
+        });
+
+        // Load a random mask from the gallery
+        async function loadRandomMask() {
+            try {
+                await loadGalleryManifest();
+                if (galleryManifest && galleryManifest.masks.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * galleryManifest.masks.length);
+                    const randomMask = galleryManifest.masks[randomIndex];
+                    await selectGalleryMask(randomMask);
+                }
+            } catch (error) {
+                console.error('Failed to load random mask:', error);
+            }
+        }
+
         // ============================================
         // INITIALIZATION
         // ============================================
@@ -2556,6 +2603,8 @@
 
             try {
                 await initializeFaceLandmarker();
+                // Load a random mask after initialization
+                await loadRandomMask();
             } catch (error) {
                 console.error('Initialization error:', error);
                 updateStatus('track', 'Error loading: ' + error.message);
