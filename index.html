@@ -482,7 +482,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.1</div>
+    <div class="version-tag">v3.2</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -540,7 +540,8 @@
                     <div class="edit-actions">
                         <button class="control-btn" id="resetPointsBtn">Reset All</button>
                         <button class="control-btn" id="textureBtn">Change Texture</button>
-                        <button class="control-btn success" id="saveEditBtn">Save Changes</button>
+                        <button class="control-btn success" id="saveEditBtn">Save</button>
+                        <button class="control-btn primary" id="publishEditBtn">Publish</button>
                     </div>
                 </div>
                 <div class="edit-controls hidden" id="textureControls">
@@ -579,8 +580,9 @@
             <div class="controls hidden" id="editControls">
                 <button class="control-btn" id="retakeBtn">Retake</button>
                 <button class="control-btn" id="addPointsBtn">Add Eye Points</button>
-                <button class="control-btn success" id="saveMaskBtn">Save Mask</button>
-                <button class="control-btn primary" id="publishBtn">Publish to Gallery</button>
+                <button class="control-btn" id="createTextureBtn">Change Texture</button>
+                <button class="control-btn success" id="saveMaskBtn">Save</button>
+                <button class="control-btn primary" id="publishBtn">Publish</button>
             </div>
 
             <div class="points-info hidden" id="pointsInfo">
@@ -1183,6 +1185,68 @@
             updateStatus('track', 'Mask saved with updated anchor points!');
         }
 
+        async function publishFromEditMask() {
+            if (!editAnchors.leftEye || !editAnchors.rightEye) {
+                document.getElementById('editStatus').textContent = 'Please place both eye points before publishing';
+                return;
+            }
+
+            const token = getGitHubToken();
+            if (!token) {
+                document.getElementById('editStatus').textContent = 'GitHub token required';
+                return;
+            }
+
+            const maskName = prompt('Enter a name for this mask:', 'My Mask');
+            if (!maskName) return;
+
+            document.getElementById('editStatus').textContent = 'Publishing to GitHub...';
+
+            try {
+                const maskId = 'mask-' + Date.now();
+
+                // Get PNG as base64
+                const imageDataUrl = editCanvas.toDataURL('image/png');
+                const base64Image = imageDataUrl.replace(/^data:image\/png;base64,/, '');
+
+                const manifestEntry = {
+                    id: maskId,
+                    name: maskName,
+                    image: `masks/images/${maskId}.png`,
+                    anchors: editAnchors
+                };
+
+                // Upload image
+                await uploadToGitHub(token, `masks/images/${maskId}.png`, base64Image, `Add mask image: ${maskName}`);
+
+                // Get and update manifest
+                const manifestResponse = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    { headers: { 'Authorization': `token ${token}` } }
+                );
+                const manifestData = await manifestResponse.json();
+                const currentManifest = JSON.parse(atob(manifestData.content));
+                currentManifest.masks.push(manifestEntry);
+
+                await uploadToGitHub(token, 'masks/manifest.json', btoa(JSON.stringify(currentManifest, null, 2)), `Add mask to gallery: ${maskName}`, manifestData.sha);
+
+                galleryManifest = null;
+                document.getElementById('editStatus').textContent = `"${maskName}" published!`;
+
+                // Also update the loaded mask
+                loadedMask.anchors = { ...editAnchors };
+
+            } catch (error) {
+                console.error('Publish error:', error);
+                if (error.message.includes('401')) {
+                    localStorage.removeItem('github_token');
+                    document.getElementById('editStatus').textContent = 'Invalid token. Try again.';
+                } else {
+                    document.getElementById('editStatus').textContent = 'Publish failed: ' + error.message;
+                }
+            }
+        }
+
         // ============================================
         // TEXTURE MODE
         // ============================================
@@ -1527,6 +1591,158 @@
                     updateStatus('capture', 'Publish failed: ' + error.message);
                 }
             }
+        }
+
+        // ============================================
+        // CREATE MASK TEXTURE MODE
+        // ============================================
+
+        let createTextureStream = null;
+        let createTextureVideo = null;
+        let createTextureAnimationId = null;
+        let createMaskAlphaData = null;
+
+        async function startCreateTextureMode() {
+            if (!currentMaskData) return;
+
+            try {
+                // Store the mask's alpha channel
+                createMaskAlphaData = new ImageData(
+                    new Uint8ClampedArray(currentMaskData.data),
+                    currentMaskData.width,
+                    currentMaskData.height
+                );
+
+                // Start rear camera
+                createTextureStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                });
+
+                createTextureVideo = document.createElement('video');
+                createTextureVideo.srcObject = createTextureStream;
+                createTextureVideo.setAttribute('playsinline', '');
+                await new Promise(r => createTextureVideo.onloadedmetadata = r);
+                await createTextureVideo.play();
+
+                // Update UI
+                document.getElementById('editControls').classList.add('hidden');
+                document.getElementById('pointsInfo').classList.add('hidden');
+                document.getElementById('toleranceRow').classList.add('hidden');
+
+                // Show texture controls (reuse capture controls area)
+                const captureControls = document.getElementById('captureControls');
+                captureControls.innerHTML = `
+                    <button class="control-btn" id="cancelCreateTextureBtn">Cancel</button>
+                    <button class="control-btn success" id="captureCreateTextureBtn">Capture Texture</button>
+                `;
+                captureControls.classList.remove('hidden');
+
+                document.getElementById('cancelCreateTextureBtn').addEventListener('click', stopCreateTextureMode);
+                document.getElementById('captureCreateTextureBtn').addEventListener('click', captureCreateTexture);
+
+                updateStatus('capture', 'Point camera at texture and tap Capture');
+
+                renderCreateTexturePreview();
+
+            } catch (error) {
+                console.error('Texture camera error:', error);
+                updateStatus('capture', 'Camera error: ' + error.message);
+            }
+        }
+
+        function stopCreateTextureMode() {
+            if (createTextureAnimationId) {
+                cancelAnimationFrame(createTextureAnimationId);
+                createTextureAnimationId = null;
+            }
+            if (createTextureStream) {
+                createTextureStream.getTracks().forEach(t => t.stop());
+                createTextureStream = null;
+            }
+            createTextureVideo = null;
+
+            // Restore UI
+            document.getElementById('captureControls').innerHTML = '<button class="control-btn primary" id="takePhotoBtn">Take Photo</button>';
+            document.getElementById('captureControls').classList.add('hidden');
+            document.getElementById('editControls').classList.remove('hidden');
+            document.getElementById('toleranceRow').classList.remove('hidden');
+
+            document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
+
+            // Redraw mask
+            if (currentMaskData) {
+                previewCtx.putImageData(currentMaskData, 0, 0);
+                drawEyePointMarkers();
+            }
+
+            updateStatus('capture', 'Texture cancelled');
+        }
+
+        function renderCreateTexturePreview() {
+            if (!createTextureStream || !createTextureVideo || !previewCtx) return;
+
+            const width = previewCanvas.width;
+            const height = previewCanvas.height;
+
+            previewCtx.clearRect(0, 0, width, height);
+
+            const videoAspect = createTextureVideo.videoWidth / createTextureVideo.videoHeight;
+            const maskAspect = width / height;
+
+            let sx = 0, sy = 0, sw = createTextureVideo.videoWidth, sh = createTextureVideo.videoHeight;
+
+            if (videoAspect > maskAspect) {
+                sw = createTextureVideo.videoHeight * maskAspect;
+                sx = (createTextureVideo.videoWidth - sw) / 2;
+            } else {
+                sh = createTextureVideo.videoWidth / maskAspect;
+                sy = (createTextureVideo.videoHeight - sh) / 2;
+            }
+
+            previewCtx.drawImage(createTextureVideo, sx, sy, sw, sh, 0, 0, width, height);
+
+            const frameData = previewCtx.getImageData(0, 0, width, height);
+            const framePixels = frameData.data;
+            const maskPixels = createMaskAlphaData.data;
+
+            for (let i = 0; i < framePixels.length; i += 4) {
+                framePixels[i + 3] = maskPixels[i + 3];
+            }
+
+            previewCtx.putImageData(frameData, 0, 0);
+
+            createTextureAnimationId = requestAnimationFrame(renderCreateTexturePreview);
+        }
+
+        function captureCreateTexture() {
+            if (createTextureAnimationId) {
+                cancelAnimationFrame(createTextureAnimationId);
+                createTextureAnimationId = null;
+            }
+
+            // Save current canvas as new mask data
+            currentMaskData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // Stop camera
+            if (createTextureStream) {
+                createTextureStream.getTracks().forEach(t => t.stop());
+                createTextureStream = null;
+            }
+            createTextureVideo = null;
+
+            // Restore UI
+            document.getElementById('captureControls').innerHTML = '<button class="control-btn primary" id="takePhotoBtn">Take Photo</button>';
+            document.getElementById('captureControls').classList.add('hidden');
+            document.getElementById('editControls').classList.remove('hidden');
+            document.getElementById('toleranceRow').classList.remove('hidden');
+
+            document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
+
+            // Redraw with markers
+            drawEyePointMarkers();
+
+            updateStatus('capture', 'Texture captured! Add eye points and publish.');
         }
 
         async function uploadToGitHub(token, path, contentBase64, message, sha = null) {
@@ -2246,6 +2462,10 @@
         document.getElementById('textureBtn').addEventListener('click', startTextureMode);
         document.getElementById('cancelTextureBtn').addEventListener('click', stopTextureMode);
         document.getElementById('captureTextureBtn').addEventListener('click', captureTexture);
+        document.getElementById('publishEditBtn').addEventListener('click', publishFromEditMask);
+
+        // Create mask texture
+        document.getElementById('createTextureBtn').addEventListener('click', startCreateTextureMode);
 
         document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
