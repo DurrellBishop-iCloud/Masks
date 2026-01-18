@@ -747,26 +747,26 @@
 
             const data = result.imageData.data;
 
-            // Remove edge blobs and tiny blobs (< 8 pixels)
-            let edgeRemoved = 0, tinyRemoved = 0;
+            // Sort blobs by size and keep only the biggest
+            const sortedBlobs = result.blobs.slice().sort((a, b) => b.size - a.size);
+            const biggestBlob = sortedBlobs[0];
+
+            // Remove all blobs except the biggest
+            let removed = 0;
             result.blobs.forEach(blob => {
-                if (blob.touchesEdge || blob.size < 8) {
+                if (blob !== biggestBlob) {
                     blob.pixelIndices.forEach(idx => {
                         data[idx * 4 + 3] = 0;
                     });
-                    if (blob.touchesEdge) edgeRemoved++;
-                    else tinyRemoved++;
+                    removed++;
                 }
             });
-
-            // Recount and colorize remaining blobs
-            const finalBlobs = countBlobs(data, width, height);
-            colorizeBlobs(data, finalBlobs.blobs);
 
             previewCtx.putImageData(result.imageData, 0, 0);
             document.getElementById('saveMaskBtn').classList.remove('hidden');
 
-            updateStatus('capture', `${finalBlobs.count} blobs (removed ${edgeRemoved} edge, ${tinyRemoved} tiny)`);
+            const blobSize = biggestBlob ? biggestBlob.size : 0;
+            updateStatus('capture', `Kept largest blob (${blobSize} pixels), removed ${removed} others`);
         }
 
         function doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance) {
