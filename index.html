@@ -536,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.6</div>
+    <div class="version-tag">v4.7</div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -549,6 +549,7 @@
             <div class="camera-container">
                 <video id="video" autoplay playsinline muted></video>
                 <canvas id="debugCanvas"></canvas>
+                <div id="tapOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:100;"></div>
                 <div class="loading-overlay" id="loadingOverlay">
                     <div class="spinner"></div>
                     <div class="loading-text" id="loadingText">Initializing...</div>
@@ -2701,7 +2702,7 @@
         });
 
         // Tap on screen to go to next mask (only when UI is hidden)
-        document.getElementById('video').addEventListener('click', async (e) => {
+        document.getElementById('tapOverlay').addEventListener('click', async (e) => {
             // Only cycle masks when UI is hidden (full screen mode)
             if (!document.querySelector('.container').classList.contains('ui-hidden')) return;
 
