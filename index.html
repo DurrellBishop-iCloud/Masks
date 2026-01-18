@@ -483,7 +483,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.6</div>
+    <div class="version-tag">v3.7</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -1206,9 +1206,16 @@
             try {
                 const maskId = 'mask-' + Date.now();
 
-                // Get PNG as base64
+                // Redraw canvas WITHOUT markers before capturing
+                editCtx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+                editCtx.drawImage(maskImage, 0, 0);
+
+                // Get PNG as base64 (clean, no markers)
                 const imageDataUrl = editCanvas.toDataURL('image/png');
                 const base64Image = imageDataUrl.replace(/^data:image\/png;base64,/, '');
+
+                // Redraw with markers so user can still see them
+                drawEditMask();
 
                 const manifestEntry = {
                     id: maskId,
