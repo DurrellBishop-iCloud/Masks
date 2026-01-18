@@ -482,7 +482,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.0</div>
+    <div class="version-tag">v3.1</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -653,6 +653,10 @@
 
         // Gallery
         let galleryManifest = null;
+
+        // GitHub config for direct publishing
+        const GITHUB_REPO = 'DurrellBishop-iCloud/Masks';
+        const GITHUB_BRANCH = 'main';
 
         // ============================================
         // TAB NAVIGATION
@@ -1412,67 +1416,148 @@
         }
 
         // ============================================
-        // PUBLISH TO GALLERY
+        // PUBLISH TO GALLERY (Direct to GitHub)
         // ============================================
 
-        function publishToGallery() {
+        function getGitHubToken() {
+            let token = localStorage.getItem('github_token');
+            if (!token) {
+                token = prompt(
+                    'Enter your GitHub Personal Access Token:\n\n' +
+                    '(Create one at github.com → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token → Select "repo" scope)'
+                );
+                if (token) {
+                    localStorage.setItem('github_token', token);
+                }
+            }
+            return token;
+        }
+
+        async function publishToGallery() {
             if (!eyePoints.left || !eyePoints.right) {
                 updateStatus('capture', 'Please add eye points before publishing');
                 return;
             }
 
-            // Redraw canvas WITHOUT markers
-            if (currentMaskData) {
-                previewCtx.putImageData(currentMaskData, 0, 0);
-            }
-
-            // Generate a unique ID
-            const maskId = 'mask-' + Date.now();
-            const maskName = prompt('Enter a name for this mask:', 'My Mask');
-
-            if (!maskName) {
-                drawEyePointMarkers();
+            const token = getGitHubToken();
+            if (!token) {
+                updateStatus('capture', 'GitHub token required to publish');
                 return;
             }
 
-            // Create the PNG
-            const imageDataUrl = previewCanvas.toDataURL('image/png');
+            const maskName = prompt('Enter a name for this mask:', 'My Mask');
+            if (!maskName) return;
 
-            // Download the PNG file
-            const pngLink = document.createElement('a');
-            pngLink.download = maskId + '.png';
-            pngLink.href = imageDataUrl;
-            pngLink.click();
+            updateStatus('capture', 'Publishing to GitHub...');
 
-            // Create manifest entry
-            const manifestEntry = {
-                id: maskId,
-                name: maskName,
-                image: `masks/images/${maskId}.png`,
-                anchors: {
-                    leftEye: {
-                        x: eyePoints.left.x / previewCanvas.width,
-                        y: eyePoints.left.y / previewCanvas.height
-                    },
-                    rightEye: {
-                        x: eyePoints.right.x / previewCanvas.width,
-                        y: eyePoints.right.y / previewCanvas.height
-                    }
+            try {
+                // Redraw canvas WITHOUT markers
+                if (currentMaskData) {
+                    previewCtx.putImageData(currentMaskData, 0, 0);
                 }
+
+                // Generate a unique ID
+                const maskId = 'mask-' + Date.now();
+
+                // Get PNG as base64 (remove data URL prefix)
+                const imageDataUrl = previewCanvas.toDataURL('image/png');
+                const base64Image = imageDataUrl.replace(/^data:image\/png;base64,/, '');
+
+                // Create manifest entry
+                const manifestEntry = {
+                    id: maskId,
+                    name: maskName,
+                    image: `masks/images/${maskId}.png`,
+                    anchors: {
+                        leftEye: {
+                            x: eyePoints.left.x / previewCanvas.width,
+                            y: eyePoints.left.y / previewCanvas.height
+                        },
+                        rightEye: {
+                            x: eyePoints.right.x / previewCanvas.width,
+                            y: eyePoints.right.y / previewCanvas.height
+                        }
+                    }
+                };
+
+                // 1. Upload the PNG image
+                await uploadToGitHub(
+                    token,
+                    `masks/images/${maskId}.png`,
+                    base64Image,
+                    `Add mask image: ${maskName}`
+                );
+
+                // 2. Get current manifest
+                const manifestResponse = await fetch(
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    { headers: { 'Authorization': `token ${token}` } }
+                );
+                const manifestData = await manifestResponse.json();
+                const currentManifest = JSON.parse(atob(manifestData.content));
+
+                // 3. Add new mask to manifest
+                currentManifest.masks.push(manifestEntry);
+
+                // 4. Update manifest
+                await uploadToGitHub(
+                    token,
+                    'masks/manifest.json',
+                    btoa(JSON.stringify(currentManifest, null, 2)),
+                    `Add mask to gallery: ${maskName}`,
+                    manifestData.sha
+                );
+
+                // Redraw markers
+                drawEyePointMarkers();
+
+                // Clear the gallery cache so it reloads
+                galleryManifest = null;
+
+                updateStatus('capture', `"${maskName}" published to gallery!`);
+
+            } catch (error) {
+                console.error('Publish error:', error);
+                drawEyePointMarkers();
+
+                if (error.message.includes('401')) {
+                    localStorage.removeItem('github_token');
+                    updateStatus('capture', 'Invalid token. Tap Publish to try again.');
+                } else {
+                    updateStatus('capture', 'Publish failed: ' + error.message);
+                }
+            }
+        }
+
+        async function uploadToGitHub(token, path, contentBase64, message, sha = null) {
+            const body = {
+                message: message,
+                content: contentBase64,
+                branch: GITHUB_BRANCH
             };
 
-            // Download the manifest entry as JSON
-            const jsonBlob = new Blob([JSON.stringify(manifestEntry, null, 2)], { type: 'application/json' });
-            const jsonLink = document.createElement('a');
-            jsonLink.download = maskId + '-manifest-entry.json';
-            jsonLink.href = URL.createObjectURL(jsonBlob);
-            setTimeout(() => jsonLink.click(), 500);
-            URL.revokeObjectURL(jsonLink.href);
+            if (sha) {
+                body.sha = sha;
+            }
 
-            // Redraw markers
-            drawEyePointMarkers();
+            const response = await fetch(
+                `https://api.github.com/repos/${GITHUB_REPO}/contents/${path}`,
+                {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${token}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(body)
+                }
+            );
 
-            updateStatus('capture', `Published! Add ${maskId}.png to masks/images/ and merge the JSON into manifest.json`);
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || response.status);
+            }
+
+            return response.json();
         }
 
         // ============================================
