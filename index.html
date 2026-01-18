@@ -536,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.3</div>
+    <div class="version-tag">v4.4</div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -2700,10 +2700,10 @@
             document.querySelector('.container').classList.toggle('ui-hidden');
         });
 
-        // Tap on camera to go to next mask
+        // Tap on camera to go to next mask (only when UI is hidden)
         document.querySelector('#trackView .camera-container').addEventListener('click', async (e) => {
-            // Don't trigger if clicking on a button or control
-            if (e.target.tagName === 'BUTTON' || e.target.closest('.controls')) return;
+            // Only cycle masks when UI is hidden (full screen mode)
+            if (!document.querySelector('.container').classList.contains('ui-hidden')) return;
 
             if (!galleryManifest || galleryManifest.masks.length === 0) return;
 
