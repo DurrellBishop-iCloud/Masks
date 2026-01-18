@@ -415,7 +415,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.5</div>
+    <div class="version-tag">v2.6</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -453,10 +453,10 @@
                 </div>
                 <div class="edit-controls">
                     <div class="anchor-buttons">
-                        <button class="control-btn anchor-btn active" data-anchor="leftEye">Left Eye</button>
-                        <button class="control-btn anchor-btn" data-anchor="rightEye">Right Eye</button>
+                        <button class="control-btn anchor-btn active" data-anchor="leftEye">Left</button>
+                        <button class="control-btn anchor-btn" data-anchor="rightEye">Right</button>
                     </div>
-                    <div class="edit-status" id="editStatus">Tap on mask to place Left Eye</div>
+                    <div class="edit-status" id="editStatus">Tap on LEFT side of mask for left eye</div>
                     <div class="edit-actions">
                         <button class="control-btn" id="resetPointsBtn">Reset All</button>
                         <button class="control-btn success" id="saveEditBtn">Save Changes</button>
@@ -495,7 +495,7 @@
             </div>
 
             <div class="points-info hidden" id="pointsInfo">
-                <span id="pointsStatus">Tap to place left eye, then right eye</span>
+                <span id="pointsStatus">Tap LEFT side for left eye, then RIGHT side</span>
                 <button class="control-btn small" id="clearPointsBtn">Clear Points</button>
             </div>
 
@@ -802,6 +802,7 @@
             const h = trackCanvas.height;
 
             // Get detected eye positions (mirrored for selfie view)
+            // In mirrored view: user's left eye appears on LEFT of screen
             const leftEye = {
                 x: (1 - landmarks[LEFT_EYE_CENTER].x) * w,
                 y: landmarks[LEFT_EYE_CENTER].y * h
@@ -811,13 +812,14 @@
                 y: landmarks[RIGHT_EYE_CENTER].y * h
             };
 
-            // Get mask anchor points (in pixel coordinates)
+            // Get mask anchor points - flip X to match mirrored view
+            // User places "Left" on left of screen, we flip so it aligns with left of face
             const maskLeftEye = {
-                x: loadedMask.anchors.leftEye.x * loadedMask.width,
+                x: (1 - loadedMask.anchors.leftEye.x) * loadedMask.width,
                 y: loadedMask.anchors.leftEye.y * loadedMask.height
             };
             const maskRightEye = {
-                x: loadedMask.anchors.rightEye.x * loadedMask.width,
+                x: (1 - loadedMask.anchors.rightEye.x) * loadedMask.width,
                 y: loadedMask.anchors.rightEye.y * loadedMask.height
             };
 
@@ -860,13 +862,13 @@
             // Rotate to match face angle
             trackCtx.rotate(rotation);
 
-            // Scale to match face size
-            trackCtx.scale(scale, scale);
+            // Scale to match face size AND flip horizontally to match mirrored view
+            trackCtx.scale(-scale, scale);
 
-            // Draw image centered on mask's eye center
+            // Draw image - offset adjusted for the flip
             trackCtx.drawImage(
                 maskImage,
-                -maskCenterX,
+                maskCenterX - loadedMask.width,
                 -maskCenterY,
                 loadedMask.width,
                 loadedMask.height
@@ -1017,11 +1019,11 @@
 
         function updateEditStatus() {
             const status = document.getElementById('editStatus');
-            const anchorName = currentEditAnchor === 'leftEye' ? 'Left Eye' : 'Right Eye';
+            const side = currentEditAnchor === 'leftEye' ? 'LEFT' : 'RIGHT';
             if (editAnchors[currentEditAnchor]) {
-                status.textContent = `${anchorName} placed. Tap to reposition or select another anchor.`;
+                status.textContent = `${side} eye placed. Tap to reposition or select other side.`;
             } else {
-                status.textContent = `Tap on mask to place ${anchorName}`;
+                status.textContent = `Tap on ${side} side of mask for ${side.toLowerCase()} eye`;
             }
         }
 
@@ -1604,9 +1606,9 @@
         function updatePointsStatus() {
             const status = document.getElementById('pointsStatus');
             if (!eyePoints.left) {
-                status.textContent = 'Tap to place LEFT eye point';
+                status.textContent = 'Tap on LEFT side of mask for left eye';
             } else if (!eyePoints.right) {
-                status.textContent = 'Tap to place RIGHT eye point';
+                status.textContent = 'Tap on RIGHT side of mask for right eye';
             } else {
                 status.textContent = 'Both eyes placed! Save or clear to redo.';
             }
