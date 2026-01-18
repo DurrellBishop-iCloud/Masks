@@ -703,6 +703,7 @@
             const width = originalImageData.width;
             const height = originalImageData.height;
             const srcData = originalImageData.data;
+            const totalPixels = width * height;
 
             // Step 1: Sample ALL edge pixels to understand paper color range
             const edgeColors = [];
@@ -740,26 +741,67 @@
             avgB = Math.round(avgB / edgeColors.length);
 
             // Step 3: Find the maximum color distance among edge pixels
-            // This tells us how much the paper color varies (shadows, lighting)
             let maxEdgeDistance = 0;
             edgeColors.forEach(c => {
                 const dist = colorDistance(c.r, c.g, c.b, avgR, avgG, avgB);
                 if (dist > maxEdgeDistance) maxEdgeDistance = dist;
             });
 
-            // Step 4: Set tolerance slightly above max edge variance
-            // Add a margin to handle slight variations
-            const autoTolerance = Math.round(maxEdgeDistance * 1.2) + 10;
+            // Step 4: Try flood fill with decreasing tolerance until we keep enough pixels
+            const minKeepRatio = 0.02;  // Must keep at least 2% of pixels (the drawing)
+            const maxKeepRatio = 0.50;  // If keeping more than 50%, tolerance too low
 
-            // Update slider to show computed value
-            document.getElementById('toleranceSlider').value = Math.min(autoTolerance, 150);
-            document.getElementById('toleranceValue').textContent = Math.min(autoTolerance, 150);
+            let tolerance = autoTune
+                ? Math.round(maxEdgeDistance * 1.2) + 10
+                : parseInt(document.getElementById('toleranceSlider').value);
 
-            const tolerance = autoTune ? autoTolerance : parseInt(document.getElementById('toleranceSlider').value);
+            let bestResult = null;
+            let attempts = 0;
+            const maxAttempts = 10;
 
-            updateStatus('capture', `Paper variance: ${Math.round(maxEdgeDistance)}, using tolerance: ${tolerance}`);
+            while (attempts < maxAttempts) {
+                attempts++;
+                const result = doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance);
 
-            // Step 5: Do the flood fill with computed tolerance
+                const keepRatio = result.opaqueCount / totalPixels;
+
+                // Check if result is good
+                if (keepRatio >= minKeepRatio && keepRatio <= maxKeepRatio) {
+                    bestResult = result;
+                    break;
+                }
+
+                if (keepRatio < minKeepRatio) {
+                    // Removed too much - reduce tolerance
+                    tolerance = Math.round(tolerance * 0.7);
+                    if (tolerance < 5) {
+                        bestResult = result;
+                        break;
+                    }
+                } else if (keepRatio > maxKeepRatio) {
+                    // Didn't remove enough - increase tolerance
+                    tolerance = Math.round(tolerance * 1.3);
+                    if (tolerance > 250) {
+                        bestResult = result;
+                        break;
+                    }
+                }
+
+                bestResult = result;
+            }
+
+            // Update slider to show final value
+            document.getElementById('toleranceSlider').value = Math.min(tolerance, 150);
+            document.getElementById('toleranceValue').textContent = Math.min(tolerance, 150);
+
+            previewCtx.putImageData(bestResult.imageData, 0, 0);
+            document.getElementById('saveMaskBtn').classList.remove('hidden');
+
+            const keepPercent = ((bestResult.opaqueCount / totalPixels) * 100).toFixed(1);
+            updateStatus('capture', `Done! Tolerance: ${tolerance}, kept ${keepPercent}% (${attempts} attempts)`);
+        }
+
+        function doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance) {
             const imageData = new ImageData(
                 new Uint8ClampedArray(srcData),
                 width,
@@ -782,6 +824,7 @@
             }
 
             // Flood fill
+            let removedCount = 0;
             while (head < queue.length) {
                 const idx = queue[head++];
                 if (visited[idx]) continue;
@@ -795,11 +838,10 @@
                 const g = data[pixelIdx + 1];
                 const b = data[pixelIdx + 2];
 
-                // Check if pixel is within paper color range
                 if (colorDistance(r, g, b, avgR, avgG, avgB) <= tolerance) {
-                    data[pixelIdx + 3] = 0; // Make transparent
+                    data[pixelIdx + 3] = 0;
+                    removedCount++;
 
-                    // Add neighbors
                     if (x > 0 && !visited[idx - 1]) queue.push(idx - 1);
                     if (x < width - 1 && !visited[idx + 1]) queue.push(idx + 1);
                     if (y > 0 && !visited[idx - width]) queue.push(idx - width);
@@ -807,9 +849,8 @@
                 }
             }
 
-            previewCtx.putImageData(imageData, 0, 0);
-            document.getElementById('saveMaskBtn').classList.remove('hidden');
-            updateStatus('capture', `Done! Paper avg: rgb(${avgR},${avgG},${avgB}), variance: ${Math.round(maxEdgeDistance)}, tolerance: ${tolerance}`);
+            const opaqueCount = (width * height) - removedCount;
+            return { imageData, opaqueCount, removedCount };
         }
 
         function sampleBackgroundColor(data, width, height) {
