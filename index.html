@@ -536,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.2</div>
+    <div class="version-tag">v4.3</div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -708,6 +708,7 @@
 
         // Gallery
         let galleryManifest = null;
+        let currentMaskIndex = 0;
 
         // GitHub config for direct publishing
         const GITHUB_REPO = 'DurrellBishop-iCloud/Masks';
@@ -2699,13 +2700,25 @@
             document.querySelector('.container').classList.toggle('ui-hidden');
         });
 
+        // Tap on camera to go to next mask
+        document.querySelector('#trackView .camera-container').addEventListener('click', async (e) => {
+            // Don't trigger if clicking on a button or control
+            if (e.target.tagName === 'BUTTON' || e.target.closest('.controls')) return;
+
+            if (!galleryManifest || galleryManifest.masks.length === 0) return;
+
+            // Go to next mask, loop back to start
+            currentMaskIndex = (currentMaskIndex + 1) % galleryManifest.masks.length;
+            await selectGalleryMask(galleryManifest.masks[currentMaskIndex]);
+        });
+
         // Load a random mask from the gallery
         async function loadRandomMask() {
             try {
                 await loadGalleryManifest();
                 if (galleryManifest && galleryManifest.masks.length > 0) {
-                    const randomIndex = Math.floor(Math.random() * galleryManifest.masks.length);
-                    const randomMask = galleryManifest.masks[randomIndex];
+                    currentMaskIndex = Math.floor(Math.random() * galleryManifest.masks.length);
+                    const randomMask = galleryManifest.masks[currentMaskIndex];
                     await selectGalleryMask(randomMask);
                 }
             } catch (error) {
