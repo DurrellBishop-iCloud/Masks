@@ -1,10 +1,14 @@
 <!DOCTYPE html>
+<!-- Version 2.0 - Added eye anchor points feature -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Face Mask Creator</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Face Mask Creator v2</title>
     <style>
         * {
             margin: 0;
@@ -294,6 +298,30 @@
             height: 100%;
             object-fit: cover;
         }
+
+        /* Points info bar */
+        .points-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: #1a3a5c;
+            border-top: 1px solid #0f3460;
+        }
+
+        .points-info span {
+            font-size: 12px;
+            color: #aaa;
+        }
+
+        .control-btn.small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .control-btn.warning {
+            background: #e67e22;
+        }
     </style>
 </head>
 <body>
@@ -344,7 +372,13 @@
 
             <div class="controls hidden" id="editControls">
                 <button class="control-btn" id="retakeBtn">Retake</button>
+                <button class="control-btn" id="addPointsBtn">Add Eye Points</button>
                 <button class="control-btn success" id="saveMaskBtn">Save Mask</button>
+            </div>
+
+            <div class="points-info hidden" id="pointsInfo">
+                <span id="pointsStatus">Tap to place left eye, then right eye</span>
+                <button class="control-btn small" id="clearPointsBtn">Clear Points</button>
             </div>
 
             <div class="status" id="captureStatus">Point camera at your drawing and tap "Take Photo"</div>
@@ -398,6 +432,10 @@
 
         // Saved masks
         const savedMasks = [];
+
+        // Eye point placement state
+        let eyePointMode = false;
+        let eyePoints = { left: null, right: null };
 
         // ============================================
         // TAB NAVIGATION
@@ -702,6 +740,10 @@
 
         function retakePhoto() {
             originalImageData = null;
+            eyePoints = { left: null, right: null };
+            eyePointMode = false;
+            document.getElementById('pointsInfo').classList.add('hidden');
+            document.getElementById('addPointsBtn').classList.remove('active');
             startCaptureCamera();
         }
 
@@ -1069,13 +1111,142 @@
             // Convert canvas to data URL
             const dataUrl = previewCanvas.toDataURL('image/png');
 
-            // For now, just download it
-            const link = document.createElement('a');
-            link.download = 'mask-' + Date.now() + '.png';
-            link.href = dataUrl;
-            link.click();
+            // Create mask data object with image and anchor points
+            const maskData = {
+                version: 1,
+                image: dataUrl,
+                width: previewCanvas.width,
+                height: previewCanvas.height,
+                anchors: {}
+            };
 
-            updateStatus('capture', 'Mask saved! You can now use it in Face Track mode.');
+            // Add eye points if they exist (normalized 0-1 coordinates)
+            if (eyePoints.left) {
+                maskData.anchors.leftEye = {
+                    x: eyePoints.left.x / previewCanvas.width,
+                    y: eyePoints.left.y / previewCanvas.height
+                };
+            }
+            if (eyePoints.right) {
+                maskData.anchors.rightEye = {
+                    x: eyePoints.right.x / previewCanvas.width,
+                    y: eyePoints.right.y / previewCanvas.height
+                };
+            }
+
+            // Download as JSON file
+            const jsonStr = JSON.stringify(maskData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.download = 'mask-' + Date.now() + '.json';
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            const hasPoints = eyePoints.left && eyePoints.right;
+            updateStatus('capture', hasPoints
+                ? 'Mask saved with eye anchor points!'
+                : 'Mask saved! (No eye points added)');
+        }
+
+        // ============================================
+        // EYE POINT PLACEMENT
+        // ============================================
+
+        function enterEyePointMode() {
+            eyePointMode = true;
+            eyePoints = { left: null, right: null };
+            document.getElementById('pointsInfo').classList.remove('hidden');
+            document.getElementById('addPointsBtn').classList.add('active');
+            updatePointsStatus();
+            drawEyePointMarkers();
+        }
+
+        function exitEyePointMode() {
+            eyePointMode = false;
+            document.getElementById('pointsInfo').classList.add('hidden');
+            document.getElementById('addPointsBtn').classList.remove('active');
+        }
+
+        function clearEyePoints() {
+            eyePoints = { left: null, right: null };
+            updatePointsStatus();
+            drawEyePointMarkers();
+        }
+
+        function updatePointsStatus() {
+            const status = document.getElementById('pointsStatus');
+            if (!eyePoints.left) {
+                status.textContent = 'Tap to place LEFT eye point';
+            } else if (!eyePoints.right) {
+                status.textContent = 'Tap to place RIGHT eye point';
+            } else {
+                status.textContent = 'Both eyes placed! Save or clear to redo.';
+            }
+        }
+
+        function placeEyePoint(canvasX, canvasY) {
+            if (!eyePoints.left) {
+                eyePoints.left = { x: canvasX, y: canvasY };
+                updatePointsStatus();
+                drawEyePointMarkers();
+            } else if (!eyePoints.right) {
+                eyePoints.right = { x: canvasX, y: canvasY };
+                updatePointsStatus();
+                drawEyePointMarkers();
+            }
+            // If both are already placed, do nothing (user must clear first)
+        }
+
+        function drawEyePointMarkers() {
+            if (!previewCanvas || !previewCtx || !originalImageData) return;
+
+            // Redraw the background-removed image first
+            removeBackground();
+
+            // Now draw eye point markers on top
+            if (eyePoints.left) {
+                drawMarker(eyePoints.left.x, eyePoints.left.y, '#00ff00', 'L');
+            }
+            if (eyePoints.right) {
+                drawMarker(eyePoints.right.x, eyePoints.right.y, '#00ff00', 'R');
+            }
+        }
+
+        function drawMarker(x, y, color, label) {
+            const radius = Math.max(15, previewCanvas.width * 0.02);
+
+            // Outer circle
+            previewCtx.strokeStyle = color;
+            previewCtx.lineWidth = 3;
+            previewCtx.beginPath();
+            previewCtx.arc(x, y, radius, 0, Math.PI * 2);
+            previewCtx.stroke();
+
+            // Inner dot
+            previewCtx.fillStyle = color;
+            previewCtx.beginPath();
+            previewCtx.arc(x, y, 4, 0, Math.PI * 2);
+            previewCtx.fill();
+
+            // Crosshairs
+            previewCtx.beginPath();
+            previewCtx.moveTo(x - radius - 5, y);
+            previewCtx.lineTo(x - radius + 8, y);
+            previewCtx.moveTo(x + radius - 8, y);
+            previewCtx.lineTo(x + radius + 5, y);
+            previewCtx.moveTo(x, y - radius - 5);
+            previewCtx.lineTo(x, y - radius + 8);
+            previewCtx.moveTo(x, y + radius - 8);
+            previewCtx.lineTo(x, y + radius + 5);
+            previewCtx.stroke();
+
+            // Label
+            previewCtx.font = `bold ${radius}px sans-serif`;
+            previewCtx.fillStyle = color;
+            previewCtx.textAlign = 'center';
+            previewCtx.textBaseline = 'middle';
+            previewCtx.fillText(label, x, y + radius + 15);
         }
 
         // Tolerance slider - live update as you drag
@@ -1083,6 +1254,13 @@
             document.getElementById('toleranceValue').textContent = e.target.value;
             if (originalImageData && paperColor) {
                 removeBackground();
+                // Redraw eye point markers if any
+                if (eyePoints.left) {
+                    drawMarker(eyePoints.left.x, eyePoints.left.y, '#00ff00', 'L');
+                }
+                if (eyePoints.right) {
+                    drawMarker(eyePoints.right.x, eyePoints.right.y, '#00ff00', 'R');
+                }
             }
         });
 
@@ -1119,7 +1297,7 @@
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
         document.getElementById('saveMaskBtn').addEventListener('click', saveMask);
 
-        // Tap on preview canvas to cut holes
+        // Tap on preview canvas - either cut holes or place eye points
         document.getElementById('previewCanvas').addEventListener('click', (e) => {
             const canvas = e.target;
             const rect = canvas.getBoundingClientRect();
@@ -1130,8 +1308,24 @@
             const canvasX = (e.clientX - rect.left) * scaleX;
             const canvasY = (e.clientY - rect.top) * scaleY;
 
-            cutHoleAtPoint(canvasX, canvasY);
+            if (eyePointMode) {
+                placeEyePoint(canvasX, canvasY);
+            } else {
+                cutHoleAtPoint(canvasX, canvasY);
+            }
         });
+
+        // Add Eye Points button
+        document.getElementById('addPointsBtn').addEventListener('click', () => {
+            if (eyePointMode) {
+                exitEyePointMode();
+            } else {
+                enterEyePointMode();
+            }
+        });
+
+        // Clear Points button
+        document.getElementById('clearPointsBtn').addEventListener('click', clearEyePoints);
 
         window.addEventListener('resize', () => {
             if (trackCanvas && isTracking) resizeTrackCanvas();
