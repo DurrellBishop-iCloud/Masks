@@ -483,7 +483,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.8</div>
+    <div class="version-tag">v3.9</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -514,7 +514,7 @@
             <!-- Mask Gallery Overlay -->
             <div class="gallery-overlay hidden" id="galleryOverlay">
                 <div class="gallery-header">
-                    <span>Choose a Mask</span>
+                    <span>Choose a Mask <span id="maskCount" style="opacity:0.7"></span></span>
                     <button class="control-btn small" id="closeGalleryBtn">Close</button>
                 </div>
                 <div class="gallery-grid" id="galleryGrid">
@@ -1430,12 +1430,32 @@
 
         async function loadGalleryManifest() {
             try {
-                // Fetch directly from GitHub raw content (bypasses GitHub Pages CDN cache)
+                // Try GitHub API first (no caching) if token available
+                const token = localStorage.getItem('github_token');
+                if (token) {
+                    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`;
+                    const response = await fetch(apiUrl, {
+                        headers: {
+                            'Authorization': `token ${token}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        },
+                        cache: 'no-store'
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        galleryManifest = JSON.parse(atob(data.content));
+                        console.log('Loaded ' + galleryManifest.masks.length + ' masks via API');
+                        return;
+                    }
+                }
+
+                // Fallback to raw GitHub content
                 const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/masks/manifest.json?t=${Date.now()}`;
                 const response = await fetch(rawUrl, {
                     cache: 'no-store'
                 });
                 galleryManifest = await response.json();
+                console.log('Loaded ' + galleryManifest.masks.length + ' masks via raw');
             } catch (error) {
                 console.error('Failed to load gallery manifest:', error);
                 // Fallback to local file if raw fetch fails
@@ -1450,12 +1470,15 @@
 
         function renderGallery() {
             const grid = document.getElementById('galleryGrid');
+            const countEl = document.getElementById('maskCount');
 
             if (!galleryManifest || galleryManifest.masks.length === 0) {
                 grid.innerHTML = '<div class="gallery-empty">No masks in gallery yet.<br>Create one and tap "Publish to Gallery"!</div>';
+                countEl.textContent = '(0)';
                 return;
             }
 
+            countEl.textContent = '(' + galleryManifest.masks.length + ')';
             grid.innerHTML = '';
 
             galleryManifest.masks.forEach(mask => {
