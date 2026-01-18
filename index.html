@@ -483,7 +483,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.5</div>
+    <div class="version-tag">v3.6</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -1419,15 +1419,21 @@
 
         async function loadGalleryManifest() {
             try {
-                // Force no-cache to always get latest from server
-                const response = await fetch('masks/manifest.json?t=' + Date.now(), {
-                    cache: 'no-store',
-                    headers: { 'Cache-Control': 'no-cache' }
+                // Fetch directly from GitHub raw content (bypasses GitHub Pages CDN cache)
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/masks/manifest.json?t=${Date.now()}`;
+                const response = await fetch(rawUrl, {
+                    cache: 'no-store'
                 });
                 galleryManifest = await response.json();
             } catch (error) {
                 console.error('Failed to load gallery manifest:', error);
-                galleryManifest = { masks: [] };
+                // Fallback to local file if raw fetch fails
+                try {
+                    const localResponse = await fetch('masks/manifest.json?t=' + Date.now());
+                    galleryManifest = await localResponse.json();
+                } catch (e) {
+                    galleryManifest = { masks: [] };
+                }
             }
         }
 
