@@ -91,13 +91,20 @@
             -webkit-transform: scaleX(-1);
         }
 
-        #debugCanvas, #captureCanvas, #previewCanvas {
+        #debugCanvas, #captureCanvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
+        }
+
+        #previewCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            cursor: crosshair;
         }
 
         /* Checkerboard background for transparency preview */
@@ -766,7 +773,55 @@
             document.getElementById('saveMaskBtn').classList.remove('hidden');
 
             const blobSize = biggestBlob ? biggestBlob.size : 0;
-            updateStatus('capture', `Kept largest blob (${blobSize} pixels), removed ${removed} others`);
+            updateStatus('capture', `Kept largest blob (${blobSize} pixels), removed ${removed} others. Tap inside to cut holes.`);
+        }
+
+        function cutHoleAtPoint(canvasX, canvasY) {
+            if (!previewCanvas || !previewCtx) return;
+
+            const imageData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+            const data = imageData.data;
+            const width = previewCanvas.width;
+            const height = previewCanvas.height;
+
+            // Check if tapped pixel is opaque
+            const startIdx = Math.floor(canvasY) * width + Math.floor(canvasX);
+            if (startIdx < 0 || startIdx >= width * height) return;
+            if (data[startIdx * 4 + 3] === 0) {
+                updateStatus('capture', 'Tap on the colored area to cut a hole');
+                return;
+            }
+
+            // Flood fill from tap point to make transparent
+            const visited = new Uint8Array(width * height);
+            const queue = [startIdx];
+            let head = 0;
+            let filledCount = 0;
+
+            while (head < queue.length) {
+                const idx = queue[head++];
+                if (visited[idx]) continue;
+                visited[idx] = 1;
+
+                // Only fill opaque pixels
+                if (data[idx * 4 + 3] === 0) continue;
+
+                // Make transparent
+                data[idx * 4 + 3] = 0;
+                filledCount++;
+
+                const x = idx % width;
+                const y = Math.floor(idx / width);
+
+                // Add neighbors
+                if (x > 0) queue.push(idx - 1);
+                if (x < width - 1) queue.push(idx + 1);
+                if (y > 0) queue.push(idx - width);
+                if (y < height - 1) queue.push(idx + width);
+            }
+
+            previewCtx.putImageData(imageData, 0, 0);
+            updateStatus('capture', `Cut hole (${filledCount} pixels). Tap again to cut more, or Save.`);
         }
 
         function doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance) {
@@ -1049,6 +1104,20 @@
         document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
         document.getElementById('saveMaskBtn').addEventListener('click', saveMask);
+
+        // Tap on preview canvas to cut holes
+        document.getElementById('previewCanvas').addEventListener('click', (e) => {
+            const canvas = e.target;
+            const rect = canvas.getBoundingClientRect();
+
+            // Convert click position to canvas coordinates
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const canvasX = (e.clientX - rect.left) * scaleX;
+            const canvasY = (e.clientY - rect.top) * scaleY;
+
+            cutHoleAtPoint(canvasX, canvasY);
+        });
 
         window.addEventListener('resize', () => {
             if (trackCanvas && isTracking) resizeTrackCanvas();
