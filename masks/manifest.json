@@ -17,21 +17,6 @@
       }
     },
     {
-      "id": "mask-1768745217862",
-      "name": "Glasses",
-      "image": "masks/images/mask-1768745217862.png",
-      "anchors": {
-        "leftEye": {
-          "x": 0.29973649538866926,
-          "y": 0.567193675889328
-        },
-        "rightEye": {
-          "x": 0.7037768994290733,
-          "y": 0.5731225296442688
-        }
-      }
-    },
-    {
       "id": "mask-1768745360034",
       "name": "Truth",
       "image": "masks/images/mask-1768745360034.png",
