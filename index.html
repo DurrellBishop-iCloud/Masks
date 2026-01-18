@@ -37,6 +37,7 @@
             position: relative;
             width: 100%;
             flex: 1;
+            min-height: 300px;
             overflow: hidden;
             background: #000;
         }
@@ -49,6 +50,13 @@
             height: 100%;
             object-fit: cover;
             transform: scaleX(-1); /* Mirror for selfie view */
+            -webkit-transform: scaleX(-1);
+            background: #222;
+        }
+
+        /* iOS Safari fix */
+        video::-webkit-media-controls {
+            display: none !important;
         }
 
         .overlay-layer {
