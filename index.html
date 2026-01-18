@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Face Tracking Debug</title>
+    <title>Face Mask Creator</title>
     <style>
         * {
             margin: 0;
@@ -33,7 +33,42 @@
             flex-direction: column;
         }
 
-        .mirror-container {
+        /* Tab navigation */
+        .tabs {
+            display: flex;
+            background: #0f0f1a;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            text-align: center;
+            background: #16213e;
+            border: none;
+            color: #888;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: #e94560;
+            color: white;
+        }
+
+        /* View containers */
+        .view {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+        }
+
+        .view.active {
+            display: flex;
+        }
+
+        .camera-container {
             position: relative;
             width: 100%;
             flex: 1;
@@ -42,24 +77,39 @@
             background: #000;
         }
 
-        #video {
+        #video, #captureVideo {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
+        }
+
+        #video {
             transform: scaleX(-1);
             -webkit-transform: scaleX(-1);
         }
 
-        #debugCanvas {
+        #debugCanvas, #captureCanvas, #previewCanvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
+        }
+
+        /* Checkerboard background for transparency preview */
+        .transparency-bg {
+            background-image:
+                linear-gradient(45deg, #444 25%, transparent 25%),
+                linear-gradient(-45deg, #444 25%, transparent 25%),
+                linear-gradient(45deg, transparent 75%, #444 75%),
+                linear-gradient(-45deg, transparent 75%, #444 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            background-color: #333;
         }
 
         .controls {
@@ -90,14 +140,18 @@
             background: #e94560;
         }
 
+        .control-btn.primary {
+            background: #e94560;
+            font-weight: 600;
+        }
+
         .control-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
-        #startBtn {
-            background: #e94560;
-            font-weight: 600;
+        .control-btn.success {
+            background: #27ae60;
         }
 
         .status {
@@ -144,57 +198,175 @@
             font-size: 14px;
             color: #888;
         }
+
+        /* Slider controls */
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #0f0f1a;
+        }
+
+        .slider-row label {
+            font-size: 12px;
+            color: #888;
+            min-width: 80px;
+        }
+
+        .slider-row input[type="range"] {
+            flex: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #333;
+            border-radius: 3px;
+        }
+
+        .slider-row input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #e94560;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .slider-value {
+            font-size: 12px;
+            color: #e94560;
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* Preview states */
+        .preview-container {
+            position: relative;
+            width: 100%;
+            flex: 1;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .preview-container img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Saved masks gallery */
+        .gallery {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            overflow-x: auto;
+            background: #0f0f1a;
+        }
+
+        .gallery-item {
+            width: 60px;
+            height: 60px;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            border: 2px solid transparent;
+            flex-shrink: 0;
+        }
+
+        .gallery-item.selected {
+            border-color: #e94560;
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="mirror-container">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="debugCanvas"></canvas>
-            <div class="loading-overlay" id="loadingOverlay">
-                <div class="spinner"></div>
-                <div class="loading-text" id="loadingText">Initializing...</div>
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" data-view="track">Face Track</button>
+            <button class="tab" data-view="capture">Create Mask</button>
+        </div>
+
+        <!-- Face Tracking View -->
+        <div class="view active" id="trackView">
+            <div class="camera-container">
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="debugCanvas"></canvas>
+                <div class="loading-overlay" id="loadingOverlay">
+                    <div class="spinner"></div>
+                    <div class="loading-text" id="loadingText">Initializing...</div>
+                </div>
             </div>
+            <div class="controls">
+                <button class="control-btn primary" id="startBtn">Start Camera</button>
+            </div>
+            <div class="status" id="trackStatus">Ready - Tap "Start Camera" to begin</div>
         </div>
 
-        <div class="controls" id="controls">
-            <button class="control-btn" id="startBtn">Start Camera</button>
-        </div>
+        <!-- Capture/Create Mask View -->
+        <div class="view" id="captureView">
+            <!-- Camera state -->
+            <div id="captureCamera" class="camera-container">
+                <video id="captureVideo" autoplay playsinline muted></video>
+            </div>
 
-        <div class="status" id="status">Ready - Tap "Start Camera" to begin</div>
+            <!-- Preview state (after photo taken) -->
+            <div id="capturePreview" class="preview-container transparency-bg hidden">
+                <canvas id="previewCanvas"></canvas>
+            </div>
+
+            <div class="slider-row" id="toleranceRow">
+                <label>Tolerance:</label>
+                <input type="range" id="toleranceSlider" min="5" max="80" value="30">
+                <span class="slider-value" id="toleranceValue">30</span>
+            </div>
+
+            <div class="controls" id="captureControls">
+                <button class="control-btn primary" id="takePhotoBtn">Take Photo</button>
+            </div>
+
+            <div class="controls hidden" id="editControls">
+                <button class="control-btn" id="retakeBtn">Retake</button>
+                <button class="control-btn primary" id="removeBackgroundBtn">Remove Background</button>
+                <button class="control-btn success hidden" id="saveMaskBtn">Save Mask</button>
+            </div>
+
+            <div class="status" id="captureStatus">Point camera at your drawing and tap "Take Photo"</div>
+        </div>
     </div>
 
     <script type="module">
         import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/+esm';
 
         // ============================================
-        // LANDMARK INDICES (MediaPipe 478 landmarks)
+        // LANDMARK INDICES
         // ============================================
 
-        // Eyes - iris centers
-        const LEFT_EYE_CENTER = 468;   // Left iris center
-        const RIGHT_EYE_CENTER = 473;  // Right iris center
-
-        // Eye corners
+        const LEFT_EYE_CENTER = 468;
+        const RIGHT_EYE_CENTER = 473;
         const LEFT_EYE_INNER = 133;
         const LEFT_EYE_OUTER = 33;
         const RIGHT_EYE_INNER = 362;
         const RIGHT_EYE_OUTER = 263;
-
-        // Mouth landmarks
         const MOUTH_LEFT = 61;
         const MOUTH_RIGHT = 291;
         const UPPER_LIP_TOP = 13;
         const LOWER_LIP_BOTTOM = 14;
-
-        // Face oval (silhouette) - key points
         const FACE_OVAL = [
             10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
             397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
             172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
         ];
-
-        // Ears (approximate - using face contour near ears)
         const LEFT_EAR_TOP = 127;
         const LEFT_EAR_BOTTOM = 234;
         const RIGHT_EAR_TOP = 356;
@@ -205,18 +377,59 @@
         // ============================================
 
         let faceLandmarker = null;
-        let video = null;
-        let canvas = null;
-        let ctx = null;
-        let isRunning = false;
-        let animationId = null;
+        let trackVideo = null;
+        let trackCanvas = null;
+        let trackCtx = null;
+        let isTracking = false;
+        let trackAnimationId = null;
+
+        let captureVideo = null;
+        let captureStream = null;
+        let previewCanvas = null;
+        let previewCtx = null;
+        let originalImageData = null;
+        let currentView = 'track';
+
+        // Saved masks
+        const savedMasks = [];
 
         // ============================================
-        // INITIALIZATION
+        // TAB NAVIGATION
+        // ============================================
+
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const viewId = tab.dataset.view;
+                switchView(viewId);
+            });
+        });
+
+        function switchView(viewId) {
+            // Update tabs
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-view="${viewId}"]`).classList.add('active');
+
+            // Update views
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId + 'View').classList.add('active');
+
+            currentView = viewId;
+
+            // Handle camera switching
+            if (viewId === 'capture') {
+                stopTracking();
+                startCaptureCamera();
+            } else {
+                stopCaptureCamera();
+            }
+        }
+
+        // ============================================
+        // FACE TRACKING (same as before)
         // ============================================
 
         async function initializeFaceLandmarker() {
-            updateStatus('Loading face detection model...');
+            updateStatus('track', 'Loading face detection model...');
 
             const filesetResolver = await FilesetResolver.forVisionTasks(
                 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/wasm'
@@ -235,228 +448,416 @@
                 outputFacialTransformationMatrixes: false
             });
 
-            updateStatus('Model loaded - Ready to start');
+            updateStatus('track', 'Model loaded - Ready to start');
             document.getElementById('startBtn').disabled = false;
             hideLoading();
         }
 
-        async function startCamera() {
+        async function startTracking() {
             try {
-                updateStatus('Requesting camera access...');
+                updateStatus('track', 'Requesting camera access...');
                 showLoading('Accessing camera...');
 
                 const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'user',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
+                    video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
                     audio: false
                 });
 
-                video = document.getElementById('video');
-                video.srcObject = stream;
+                trackVideo = document.getElementById('video');
+                trackVideo.srcObject = stream;
+                await new Promise(r => trackVideo.onloadedmetadata = r);
+                await trackVideo.play();
 
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => resolve();
-                });
-
-                await video.play();
-
-                // Setup canvas
-                canvas = document.getElementById('debugCanvas');
-                ctx = canvas.getContext('2d');
-                resizeCanvas();
+                trackCanvas = document.getElementById('debugCanvas');
+                trackCtx = trackCanvas.getContext('2d');
+                resizeTrackCanvas();
 
                 hideLoading();
-                isRunning = true;
+                isTracking = true;
                 document.getElementById('startBtn').textContent = 'Stop Camera';
                 document.getElementById('startBtn').classList.add('active');
-                updateStatus('Face tracking active');
+                updateStatus('track', 'Face tracking active');
 
                 detectFaces();
-
             } catch (error) {
                 console.error('Camera error:', error);
-                updateStatus('Camera error: ' + error.message);
+                updateStatus('track', 'Camera error: ' + error.message);
                 hideLoading();
             }
         }
 
-        function stopCamera() {
-            isRunning = false;
-
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-                animationId = null;
+        function stopTracking() {
+            isTracking = false;
+            if (trackAnimationId) {
+                cancelAnimationFrame(trackAnimationId);
+                trackAnimationId = null;
             }
-
-            if (video && video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
+            if (trackVideo && trackVideo.srcObject) {
+                trackVideo.srcObject.getTracks().forEach(t => t.stop());
+                trackVideo.srcObject = null;
             }
-
-            if (ctx) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (trackCtx) {
+                trackCtx.clearRect(0, 0, trackCanvas.width, trackCanvas.height);
             }
-
             document.getElementById('startBtn').textContent = 'Start Camera';
             document.getElementById('startBtn').classList.remove('active');
-            updateStatus('Camera stopped');
+            updateStatus('track', 'Camera stopped');
         }
 
-        function resizeCanvas() {
-            const container = document.querySelector('.mirror-container');
+        function resizeTrackCanvas() {
+            const container = trackCanvas.parentElement;
             const rect = container.getBoundingClientRect();
-            canvas.width = rect.width;
-            canvas.height = rect.height;
+            trackCanvas.width = rect.width;
+            trackCanvas.height = rect.height;
         }
-
-        // ============================================
-        // FACE DETECTION & DRAWING
-        // ============================================
 
         function detectFaces() {
-            if (!isRunning || !faceLandmarker || !video) return;
-
-            const startTime = performance.now();
+            if (!isTracking || !faceLandmarker || !trackVideo) return;
 
             try {
-                const results = faceLandmarker.detectForVideo(video, startTime);
-
-                // Clear canvas
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const results = faceLandmarker.detectForVideo(trackVideo, performance.now());
+                trackCtx.clearRect(0, 0, trackCanvas.width, trackCanvas.height);
 
                 if (results.faceLandmarks && results.faceLandmarks.length > 0) {
-                    const landmarks = results.faceLandmarks[0];
-                    drawDebugOverlay(landmarks);
+                    drawDebugOverlay(results.faceLandmarks[0]);
                 }
             } catch (error) {
                 console.error('Detection error:', error);
             }
 
-            animationId = requestAnimationFrame(detectFaces);
+            trackAnimationId = requestAnimationFrame(detectFaces);
         }
 
         function drawDebugOverlay(landmarks) {
-            const w = canvas.width;
-            const h = canvas.height;
+            const w = trackCanvas.width;
+            const h = trackCanvas.height;
+            const toCanvas = (idx) => ({
+                x: (1 - landmarks[idx].x) * w,
+                y: landmarks[idx].y * h
+            });
 
-            // Helper to convert landmark to mirrored canvas coordinates
-            const toCanvas = (idx) => {
-                const lm = landmarks[idx];
-                return {
-                    x: (1 - lm.x) * w,  // Mirror X
-                    y: lm.y * h
-                };
-            };
-
-            // ---- 1. FACE OVAL (thin outline) ----
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-
-            const firstOval = toCanvas(FACE_OVAL[0]);
-            ctx.moveTo(firstOval.x, firstOval.y);
-
+            // Face oval
+            trackCtx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+            trackCtx.lineWidth = 2;
+            trackCtx.beginPath();
+            const first = toCanvas(FACE_OVAL[0]);
+            trackCtx.moveTo(first.x, first.y);
             for (let i = 1; i < FACE_OVAL.length; i++) {
                 const pt = toCanvas(FACE_OVAL[i]);
-                ctx.lineTo(pt.x, pt.y);
+                trackCtx.lineTo(pt.x, pt.y);
             }
-            ctx.closePath();
-            ctx.stroke();
+            trackCtx.closePath();
+            trackCtx.stroke();
 
-            // ---- 2. EYE DOTS (exact positions) ----
-            ctx.fillStyle = '#00ff00';
+            // Eyes
+            trackCtx.fillStyle = '#00ff00';
+            [LEFT_EYE_CENTER, RIGHT_EYE_CENTER].forEach(idx => {
+                const pt = toCanvas(idx);
+                trackCtx.beginPath();
+                trackCtx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+                trackCtx.fill();
+            });
 
-            // Left eye center
-            const leftEye = toCanvas(LEFT_EYE_CENTER);
-            ctx.beginPath();
-            ctx.arc(leftEye.x, leftEye.y, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Right eye center
-            const rightEye = toCanvas(RIGHT_EYE_CENTER);
-            ctx.beginPath();
-            ctx.arc(rightEye.x, rightEye.y, 6, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Eye corners (smaller dots)
-            ctx.fillStyle = '#ffff00';
+            trackCtx.fillStyle = '#ffff00';
             [LEFT_EYE_INNER, LEFT_EYE_OUTER, RIGHT_EYE_INNER, RIGHT_EYE_OUTER].forEach(idx => {
                 const pt = toCanvas(idx);
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-                ctx.fill();
+                trackCtx.beginPath();
+                trackCtx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+                trackCtx.fill();
             });
 
-            // ---- 3. MOUTH LINE ----
-            const mouthLeft = toCanvas(MOUTH_LEFT);
-            const mouthRight = toCanvas(MOUTH_RIGHT);
-            const upperLip = toCanvas(UPPER_LIP_TOP);
-            const lowerLip = toCanvas(LOWER_LIP_BOTTOM);
+            // Mouth
+            const mL = toCanvas(MOUTH_LEFT);
+            const mR = toCanvas(MOUTH_RIGHT);
+            trackCtx.strokeStyle = '#ff00ff';
+            trackCtx.lineWidth = 3;
+            trackCtx.beginPath();
+            trackCtx.moveTo(mL.x, mL.y);
+            trackCtx.lineTo(mR.x, mR.y);
+            trackCtx.stroke();
 
-            // Horizontal line across mouth
-            ctx.strokeStyle = '#ff00ff';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(mouthLeft.x, mouthLeft.y);
-            ctx.lineTo(mouthRight.x, mouthRight.y);
-            ctx.stroke();
+            trackCtx.fillStyle = '#ff00ff';
+            [mL, mR].forEach(pt => {
+                trackCtx.beginPath();
+                trackCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                trackCtx.fill();
+            });
 
-            // Mouth corners dots
-            ctx.fillStyle = '#ff00ff';
-            ctx.beginPath();
-            ctx.arc(mouthLeft.x, mouthLeft.y, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(mouthRight.x, mouthRight.y, 4, 0, Math.PI * 2);
-            ctx.fill();
+            const uL = toCanvas(UPPER_LIP_TOP);
+            const lL = toCanvas(LOWER_LIP_BOTTOM);
+            trackCtx.fillStyle = '#ff6600';
+            [uL, lL].forEach(pt => {
+                trackCtx.beginPath();
+                trackCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                trackCtx.fill();
+            });
 
-            // Upper and lower lip dots
-            ctx.fillStyle = '#ff6600';
-            ctx.beginPath();
-            ctx.arc(upperLip.x, upperLip.y, 4, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.beginPath();
-            ctx.arc(lowerLip.x, lowerLip.y, 4, 0, Math.PI * 2);
-            ctx.fill();
+            // Ears
+            trackCtx.strokeStyle = '#ffff00';
+            trackCtx.lineWidth = 3;
+            const leT = toCanvas(LEFT_EAR_TOP);
+            const leB = toCanvas(LEFT_EAR_BOTTOM);
+            trackCtx.beginPath();
+            trackCtx.moveTo(leT.x, leT.y);
+            trackCtx.lineTo(leB.x, leB.y);
+            trackCtx.stroke();
 
-            // ---- 4. EAR LINES ----
-            ctx.strokeStyle = '#ffff00';
-            ctx.lineWidth = 3;
+            const reT = toCanvas(RIGHT_EAR_TOP);
+            const reB = toCanvas(RIGHT_EAR_BOTTOM);
+            trackCtx.beginPath();
+            trackCtx.moveTo(reT.x, reT.y);
+            trackCtx.lineTo(reB.x, reB.y);
+            trackCtx.stroke();
 
-            // Left ear
-            const leftEarTop = toCanvas(LEFT_EAR_TOP);
-            const leftEarBottom = toCanvas(LEFT_EAR_BOTTOM);
-            ctx.beginPath();
-            ctx.moveTo(leftEarTop.x, leftEarTop.y);
-            ctx.lineTo(leftEarBottom.x, leftEarBottom.y);
-            ctx.stroke();
-
-            // Right ear
-            const rightEarTop = toCanvas(RIGHT_EAR_TOP);
-            const rightEarBottom = toCanvas(RIGHT_EAR_BOTTOM);
-            ctx.beginPath();
-            ctx.moveTo(rightEarTop.x, rightEarTop.y);
-            ctx.lineTo(rightEarBottom.x, rightEarBottom.y);
-            ctx.stroke();
-
-            // Ear endpoint dots
-            ctx.fillStyle = '#ffff00';
-            [leftEarTop, leftEarBottom, rightEarTop, rightEarBottom].forEach(pt => {
-                ctx.beginPath();
-                ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-                ctx.fill();
+            trackCtx.fillStyle = '#ffff00';
+            [leT, leB, reT, reB].forEach(pt => {
+                trackCtx.beginPath();
+                trackCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                trackCtx.fill();
             });
         }
+
+        // ============================================
+        // CAPTURE / CREATE MASK
+        // ============================================
+
+        async function startCaptureCamera() {
+            try {
+                updateStatus('capture', 'Starting camera...');
+
+                captureStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                });
+
+                captureVideo = document.getElementById('captureVideo');
+                captureVideo.srcObject = captureStream;
+                await new Promise(r => captureVideo.onloadedmetadata = r);
+                await captureVideo.play();
+
+                // Show camera, hide preview
+                document.getElementById('captureCamera').classList.remove('hidden');
+                document.getElementById('capturePreview').classList.add('hidden');
+                document.getElementById('captureControls').classList.remove('hidden');
+                document.getElementById('editControls').classList.add('hidden');
+                document.getElementById('toleranceRow').classList.add('hidden');
+
+                updateStatus('capture', 'Point camera at your drawing and tap "Take Photo"');
+            } catch (error) {
+                console.error('Capture camera error:', error);
+                updateStatus('capture', 'Camera error: ' + error.message);
+            }
+        }
+
+        function stopCaptureCamera() {
+            if (captureStream) {
+                captureStream.getTracks().forEach(t => t.stop());
+                captureStream = null;
+            }
+            if (captureVideo) {
+                captureVideo.srcObject = null;
+            }
+        }
+
+        function takePhoto() {
+            if (!captureVideo) return;
+
+            previewCanvas = document.getElementById('previewCanvas');
+            previewCtx = previewCanvas.getContext('2d', { willReadFrequently: true });
+
+            // Set canvas to video dimensions
+            previewCanvas.width = captureVideo.videoWidth;
+            previewCanvas.height = captureVideo.videoHeight;
+
+            // Draw video frame to canvas
+            previewCtx.drawImage(captureVideo, 0, 0);
+
+            // Store original image data
+            originalImageData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
+            // Stop camera
+            stopCaptureCamera();
+
+            // Show preview, hide camera
+            document.getElementById('captureCamera').classList.add('hidden');
+            document.getElementById('capturePreview').classList.remove('hidden');
+            document.getElementById('captureControls').classList.add('hidden');
+            document.getElementById('editControls').classList.remove('hidden');
+            document.getElementById('toleranceRow').classList.remove('hidden');
+            document.getElementById('saveMaskBtn').classList.add('hidden');
+
+            updateStatus('capture', 'Adjust tolerance and tap "Remove Background"');
+        }
+
+        function retakePhoto() {
+            originalImageData = null;
+            startCaptureCamera();
+        }
+
+        function removeBackground() {
+            if (!originalImageData) return;
+
+            updateStatus('capture', 'Removing background...');
+
+            const tolerance = parseInt(document.getElementById('toleranceSlider').value);
+
+            // Clone original data
+            const imageData = new ImageData(
+                new Uint8ClampedArray(originalImageData.data),
+                originalImageData.width,
+                originalImageData.height
+            );
+
+            const data = imageData.data;
+            const width = imageData.width;
+            const height = imageData.height;
+
+            // Sample background color from corners
+            const bgColor = sampleBackgroundColor(data, width, height);
+
+            // Create visited array for flood fill
+            const visited = new Uint8Array(width * height);
+
+            // Flood fill from all edges
+            const queue = [];
+
+            // Add edge pixels to queue
+            for (let x = 0; x < width; x++) {
+                queue.push([x, 0]);
+                queue.push([x, height - 1]);
+            }
+            for (let y = 0; y < height; y++) {
+                queue.push([0, y]);
+                queue.push([width - 1, y]);
+            }
+
+            // Flood fill
+            while (queue.length > 0) {
+                const [x, y] = queue.shift();
+
+                if (x < 0 || x >= width || y < 0 || y >= height) continue;
+
+                const idx = y * width + x;
+                if (visited[idx]) continue;
+
+                const pixelIdx = idx * 4;
+                const r = data[pixelIdx];
+                const g = data[pixelIdx + 1];
+                const b = data[pixelIdx + 2];
+
+                // Check if pixel is similar to background
+                if (colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b) <= tolerance) {
+                    visited[idx] = 1;
+                    data[pixelIdx + 3] = 0; // Make transparent
+
+                    // Add neighbors
+                    queue.push([x + 1, y]);
+                    queue.push([x - 1, y]);
+                    queue.push([x, y + 1]);
+                    queue.push([x, y - 1]);
+                }
+            }
+
+            // Optional: Clean up edges (erode then dilate transparency slightly)
+            // Skip for now, can add later
+
+            // Put processed image back
+            previewCtx.putImageData(imageData, 0, 0);
+
+            document.getElementById('saveMaskBtn').classList.remove('hidden');
+            updateStatus('capture', 'Background removed! Adjust tolerance if needed, or Save Mask');
+        }
+
+        function sampleBackgroundColor(data, width, height) {
+            // Sample from corners
+            const samples = [];
+            const cornerSize = Math.min(20, Math.floor(width / 10), Math.floor(height / 10));
+
+            // Top-left corner
+            for (let y = 0; y < cornerSize; y++) {
+                for (let x = 0; x < cornerSize; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+                }
+            }
+
+            // Top-right corner
+            for (let y = 0; y < cornerSize; y++) {
+                for (let x = width - cornerSize; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+                }
+            }
+
+            // Bottom-left corner
+            for (let y = height - cornerSize; y < height; y++) {
+                for (let x = 0; x < cornerSize; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+                }
+            }
+
+            // Bottom-right corner
+            for (let y = height - cornerSize; y < height; y++) {
+                for (let x = width - cornerSize; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    samples.push({ r: data[idx], g: data[idx + 1], b: data[idx + 2] });
+                }
+            }
+
+            // Average the samples
+            const avg = { r: 0, g: 0, b: 0 };
+            samples.forEach(s => {
+                avg.r += s.r;
+                avg.g += s.g;
+                avg.b += s.b;
+            });
+            avg.r = Math.round(avg.r / samples.length);
+            avg.g = Math.round(avg.g / samples.length);
+            avg.b = Math.round(avg.b / samples.length);
+
+            return avg;
+        }
+
+        function colorDistance(r1, g1, b1, r2, g2, b2) {
+            // Simple Euclidean distance in RGB space
+            return Math.sqrt(
+                Math.pow(r1 - r2, 2) +
+                Math.pow(g1 - g2, 2) +
+                Math.pow(b1 - b2, 2)
+            );
+        }
+
+        function saveMask() {
+            // Convert canvas to data URL
+            const dataUrl = previewCanvas.toDataURL('image/png');
+
+            // For now, just download it
+            const link = document.createElement('a');
+            link.download = 'mask-' + Date.now() + '.png';
+            link.href = dataUrl;
+            link.click();
+
+            updateStatus('capture', 'Mask saved! You can now use it in Face Track mode.');
+        }
+
+        // Tolerance slider - live update
+        document.getElementById('toleranceSlider').addEventListener('input', (e) => {
+            document.getElementById('toleranceValue').textContent = e.target.value;
+        });
+
+        document.getElementById('toleranceSlider').addEventListener('change', () => {
+            if (originalImageData) {
+                removeBackground();
+            }
+        });
 
         // ============================================
         // UI HELPERS
         // ============================================
 
-        function updateStatus(message) {
-            document.getElementById('status').textContent = message;
+        function updateStatus(view, message) {
+            document.getElementById(view + 'Status').textContent = message;
         }
 
         function showLoading(text) {
@@ -473,15 +874,20 @@
         // ============================================
 
         document.getElementById('startBtn').addEventListener('click', () => {
-            if (isRunning) {
-                stopCamera();
+            if (isTracking) {
+                stopTracking();
             } else {
-                startCamera();
+                startTracking();
             }
         });
 
+        document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
+        document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
+        document.getElementById('removeBackgroundBtn').addEventListener('click', removeBackground);
+        document.getElementById('saveMaskBtn').addEventListener('click', saveMask);
+
         window.addEventListener('resize', () => {
-            if (canvas) resizeCanvas();
+            if (trackCanvas && isTracking) resizeTrackCanvas();
         });
 
         // ============================================
@@ -496,7 +902,7 @@
                 await initializeFaceLandmarker();
             } catch (error) {
                 console.error('Initialization error:', error);
-                updateStatus('Error loading: ' + error.message);
+                updateStatus('track', 'Error loading: ' + error.message);
                 hideLoading();
             }
         });
