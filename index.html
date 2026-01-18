@@ -794,15 +794,22 @@
             document.getElementById('toleranceSlider').value = Math.min(tolerance, 150);
             document.getElementById('toleranceValue').textContent = Math.min(tolerance, 150);
 
-            previewCtx.putImageData(bestResult.imageData, 0, 0);
+            // Remove blobs that touch the edge (junk/shadows)
+            const imageData = bestResult.imageData;
+            const data = imageData.data;
+            const edgeBlobsRemoved = removeEdgeBlobs(data, bestResult.blobs);
+
+            // Recount blobs after removing edge ones
+            const finalBlobInfo = countBlobs(data, width, height);
+
+            // Colorize remaining blobs for visualization
+            colorizeBlobs(data, finalBlobInfo.blobs);
+
+            previewCtx.putImageData(imageData, 0, 0);
             document.getElementById('saveMaskBtn').classList.remove('hidden');
 
-            const keepPercent = ((bestResult.opaqueCount / totalPixels) * 100).toFixed(1);
-            const blobCount = bestResult.blobCount;
-            const largestBlob = bestResult.blobs[0];
-            const largestBlobPercent = largestBlob ? ((largestBlob.size / bestResult.opaqueCount) * 100).toFixed(0) : 0;
-
-            updateStatus('capture', `Done! ${blobCount} blob${blobCount !== 1 ? 's' : ''} found. Largest: ${largestBlobPercent}% of kept pixels`);
+            const keptBlobs = finalBlobInfo.blobs.filter(b => !b.touchesEdge);
+            updateStatus('capture', `Done! ${finalBlobInfo.count} blobs (removed ${edgeBlobsRemoved} edge blobs). Each blob colored differently.`);
         }
 
         function doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance) {
@@ -863,21 +870,39 @@
 
         function countBlobs(data, width, height) {
             const visited = new Uint8Array(width * height);
+            const blobMap = new Int32Array(width * height); // Which blob each pixel belongs to (-1 = none)
+            blobMap.fill(-1);
             const blobs = [];
             let blobCount = 0;
 
+            // Colors for visualizing blobs
+            const blobColors = [
+                [255, 0, 0],     // red
+                [0, 255, 0],     // green
+                [0, 0, 255],     // blue
+                [255, 255, 0],   // yellow
+                [255, 0, 255],   // magenta
+                [0, 255, 255],   // cyan
+                [255, 128, 0],   // orange
+                [128, 0, 255],   // purple
+                [0, 255, 128],   // spring green
+                [255, 0, 128],   // pink
+            ];
+
             for (let startIdx = 0; startIdx < width * height; startIdx++) {
-                // Skip if already visited or transparent
                 if (visited[startIdx]) continue;
                 if (data[startIdx * 4 + 3] === 0) {
                     visited[startIdx] = 1;
                     continue;
                 }
 
-                // Found a new blob - flood fill to count its size
+                // Found a new blob
+                const blobId = blobCount;
                 blobCount++;
                 let blobSize = 0;
                 let minX = width, minY = height, maxX = 0, maxY = 0;
+                let touchesEdge = false;
+                const pixelIndices = [];
 
                 const queue = [startIdx];
                 let head = 0;
@@ -887,20 +912,25 @@
                     if (visited[idx]) continue;
                     visited[idx] = 1;
 
-                    // Check if opaque
                     if (data[idx * 4 + 3] === 0) continue;
 
                     blobSize++;
+                    blobMap[idx] = blobId;
+                    pixelIndices.push(idx);
+
                     const x = idx % width;
                     const y = Math.floor(idx / width);
 
-                    // Track bounding box
+                    // Check if touches edge
+                    if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+                        touchesEdge = true;
+                    }
+
                     if (x < minX) minX = x;
                     if (x > maxX) maxX = x;
                     if (y < minY) minY = y;
                     if (y > maxY) maxY = y;
 
-                    // Add neighbors
                     if (x > 0 && !visited[idx - 1]) queue.push(idx - 1);
                     if (x < width - 1 && !visited[idx + 1]) queue.push(idx + 1);
                     if (y > 0 && !visited[idx - width]) queue.push(idx - width);
@@ -908,15 +938,45 @@
                 }
 
                 blobs.push({
+                    id: blobId,
                     size: blobSize,
-                    bounds: { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
+                    touchesEdge,
+                    pixelIndices,
+                    bounds: { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY },
+                    color: blobColors[blobId % blobColors.length]
                 });
             }
 
             // Sort blobs by size (largest first)
             blobs.sort((a, b) => b.size - a.size);
 
-            return { count: blobCount, blobs };
+            return { count: blobCount, blobs, blobMap };
+        }
+
+        function colorizeBlobs(data, blobs) {
+            // Color each blob with its assigned color (for visualization)
+            blobs.forEach(blob => {
+                const [r, g, b] = blob.color;
+                blob.pixelIndices.forEach(idx => {
+                    data[idx * 4] = r;
+                    data[idx * 4 + 1] = g;
+                    data[idx * 4 + 2] = b;
+                });
+            });
+        }
+
+        function removeEdgeBlobs(data, blobs) {
+            // Remove any blob that touches the edge
+            let removedCount = 0;
+            blobs.forEach(blob => {
+                if (blob.touchesEdge) {
+                    blob.pixelIndices.forEach(idx => {
+                        data[idx * 4 + 3] = 0; // Make transparent
+                    });
+                    removedCount++;
+                }
+            });
+            return removedCount;
         }
 
         function sampleBackgroundColor(data, width, height) {
