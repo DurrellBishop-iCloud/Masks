@@ -1350,23 +1350,23 @@
                 const manifestEntry = {
                     id: maskId,
                     name: maskName,
-                    image: `masks/images/${maskId}.png`,
+                    image: `masks-mouth/images/${maskId}.png`,
                     anchors: editAnchors
                 };
 
                 // Upload image
-                await uploadToGitHub(token, `masks/images/${maskId}.png`, base64Image, `Add mask image: ${maskName}`);
+                await uploadToGitHub(token, `masks-mouth/images/${maskId}.png`, base64Image, `Add mask image: ${maskName}`);
 
                 // Get and update manifest
                 const manifestResponse = await fetch(
-                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks-mouth/manifest.json`,
                     { headers: { 'Authorization': `token ${token}` } }
                 );
                 const manifestData = await manifestResponse.json();
                 const currentManifest = JSON.parse(atob(manifestData.content));
                 currentManifest.masks.push(manifestEntry);
 
-                await uploadToGitHub(token, 'masks/manifest.json', btoa(JSON.stringify(currentManifest, null, 2)), `Add mask to gallery: ${maskName}`, manifestData.sha);
+                await uploadToGitHub(token, 'masks-mouth/manifest.json', btoa(JSON.stringify(currentManifest, null, 2)), `Add mask to gallery: ${maskName}`, manifestData.sha);
 
                 galleryManifest = null;
                 document.getElementById('editStatus').textContent = `"${maskName}" published!`;
@@ -1559,7 +1559,7 @@
                 // Try GitHub API first (no caching) if token available
                 const token = localStorage.getItem('github_token');
                 if (token) {
-                    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`;
+                    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/masks-mouth/manifest.json`;
                     const response = await fetch(apiUrl, {
                         headers: {
                             'Authorization': `token ${token}`,
@@ -1576,7 +1576,7 @@
                 }
 
                 // Fallback to raw GitHub content
-                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/masks/manifest.json?t=${Date.now()}`;
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/masks-mouth/manifest.json?t=${Date.now()}`;
                 const response = await fetch(rawUrl, {
                     cache: 'no-store'
                 });
@@ -1586,7 +1586,7 @@
                 console.error('Failed to load gallery manifest:', error);
                 // Fallback to local file if raw fetch fails
                 try {
-                    const localResponse = await fetch('masks/manifest.json?t=' + Date.now());
+                    const localResponse = await fetch('masks-mouth/manifest.json?t=' + Date.now());
                     galleryManifest = await localResponse.json();
                 } catch (e) {
                     galleryManifest = { masks: [] };
@@ -1673,7 +1673,7 @@
 
                 // Get current manifest and remove this mask
                 const manifestResponse = await fetch(
-                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks-mouth/manifest.json`,
                     { headers: { 'Authorization': `token ${token}` } }
                 );
                 const manifestData = await manifestResponse.json();
@@ -1684,7 +1684,7 @@
 
                 // Update manifest on GitHub
                 await fetch(
-                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks-mouth/manifest.json`,
                     {
                         method: 'PUT',
                         headers: {
@@ -1825,21 +1825,21 @@
                 const manifestEntry = {
                     id: maskId,
                     name: maskName,
-                    image: `masks/images/${maskId}.png`,
+                    image: `masks-mouth/images/${maskId}.png`,
                     anchors: anchors
                 };
 
                 // 1. Upload the PNG image
                 await uploadToGitHub(
                     token,
-                    `masks/images/${maskId}.png`,
+                    `masks-mouth/images/${maskId}.png`,
                     base64Image,
                     `Add mask image: ${maskName}`
                 );
 
                 // 2. Get current manifest
                 const manifestResponse = await fetch(
-                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks/manifest.json`,
+                    `https://api.github.com/repos/${GITHUB_REPO}/contents/masks-mouth/manifest.json`,
                     { headers: { 'Authorization': `token ${token}` } }
                 );
                 const manifestData = await manifestResponse.json();
@@ -1851,7 +1851,7 @@
                 // 4. Update manifest
                 await uploadToGitHub(
                     token,
-                    'masks/manifest.json',
+                    'masks-mouth/manifest.json',
                     btoa(JSON.stringify(currentManifest, null, 2)),
                     `Add mask to gallery: ${maskName}`,
                     manifestData.sha
