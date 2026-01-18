@@ -536,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v5.1</div>
+    <div class="version-tag">v5.1-mouth</div>
     <div id="debugInfo" style="display:none;position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;padding:10px;z-index:9999;max-width:90%;"></div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
@@ -716,7 +716,7 @@
 
         // GitHub config for direct publishing
         const GITHUB_REPO = 'DurrellBishop-iCloud/Masks';
-        const GITHUB_BRANCH = 'main';
+        const GITHUB_BRANCH = 'mouth-anchors';
 
         // ============================================
         // TAB NAVIGATION
@@ -1576,7 +1576,7 @@
                 }
 
                 // Fallback to raw GitHub content
-                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/main/masks/manifest.json?t=${Date.now()}`;
+                const rawUrl = `https://raw.githubusercontent.com/${GITHUB_REPO}/${GITHUB_BRANCH}/masks/manifest.json?t=${Date.now()}`;
                 const response = await fetch(rawUrl, {
                     cache: 'no-store'
                 });
