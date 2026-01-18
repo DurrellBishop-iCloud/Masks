@@ -483,7 +483,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.7</div>
+    <div class="version-tag">v3.8</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -526,7 +526,7 @@
             <div class="edit-overlay hidden" id="editMaskOverlay">
                 <div class="edit-header">
                     <span>Edit Anchor Points</span>
-                    <button class="control-btn small" id="closeEditBtn">Cancel</button>
+                    <button class="control-btn small" id="closeEditBtn">Done</button>
                 </div>
                 <div class="edit-canvas-container transparency-bg">
                     <canvas id="editMaskCanvas"></canvas>
@@ -541,7 +541,6 @@
                     <div class="edit-actions">
                         <button class="control-btn" id="resetPointsBtn">Reset All</button>
                         <button class="control-btn" id="textureBtn">Change Texture</button>
-                        <button class="control-btn success" id="saveEditBtn">Save</button>
                         <button class="control-btn primary" id="publishEditBtn">Publish</button>
                     </div>
                 </div>
@@ -1058,6 +1057,11 @@
             // Stop texture mode if active
             if (textureStream) {
                 stopTextureMode();
+            }
+
+            // Auto-save anchor changes if both points are set
+            if (editAnchors.leftEye && editAnchors.rightEye) {
+                loadedMask.anchors = { ...editAnchors };
             }
 
             document.getElementById('editMaskOverlay').classList.add('hidden');
@@ -2451,7 +2455,6 @@
         document.getElementById('editMaskBtn').addEventListener('click', openEditMask);
         document.getElementById('closeEditBtn').addEventListener('click', closeEditMask);
         document.getElementById('resetPointsBtn').addEventListener('click', resetEditAnchors);
-        document.getElementById('saveEditBtn').addEventListener('click', saveEditedMask);
 
         document.querySelectorAll('.anchor-btn').forEach(btn => {
             btn.addEventListener('click', () => {
