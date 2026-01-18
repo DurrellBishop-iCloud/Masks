@@ -415,7 +415,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.7</div>
+    <div class="version-tag">v2.8</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -1537,7 +1537,12 @@
         }
 
         function saveMask() {
-            // Convert canvas to data URL
+            // Redraw canvas WITHOUT markers before saving
+            if (currentMaskData) {
+                previewCtx.putImageData(currentMaskData, 0, 0);
+            }
+
+            // Convert canvas to data URL (clean, no markers)
             const dataUrl = previewCanvas.toDataURL('image/png');
 
             // Create mask data object with image and anchor points
@@ -1571,6 +1576,9 @@
             link.href = URL.createObjectURL(blob);
             link.click();
             URL.revokeObjectURL(link.href);
+
+            // Redraw markers for continued editing
+            drawEyePointMarkers();
 
             const hasPoints = eyePoints.left && eyePoints.right;
             updateStatus('capture', hasPoints
