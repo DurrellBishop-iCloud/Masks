@@ -415,7 +415,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.6</div>
+    <div class="version-tag">v2.7</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -691,13 +691,13 @@
                 if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                     const landmarks = results.faceLandmarks[0];
 
-                    // Draw mask first (behind debug overlay)
+                    // Draw mask
                     if (loadedMask && maskImage) {
                         drawMaskOverlay(landmarks);
                     }
 
-                    // Draw debug overlay on top (can be toggled off later)
-                    drawDebugOverlay(landmarks);
+                    // Debug overlay disabled for now - uncomment to show face landmarks
+                    // drawDebugOverlay(landmarks);
                 }
             } catch (error) {
                 console.error('Detection error:', error);
