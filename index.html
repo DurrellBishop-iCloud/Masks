@@ -415,7 +415,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.8</div>
+    <div class="version-tag">v2.9</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -450,8 +450,9 @@
                 </div>
                 <div class="edit-canvas-container transparency-bg">
                     <canvas id="editMaskCanvas"></canvas>
+                    <video id="textureVideo" autoplay playsinline muted style="display:none"></video>
                 </div>
-                <div class="edit-controls">
+                <div class="edit-controls" id="anchorControls">
                     <div class="anchor-buttons">
                         <button class="control-btn anchor-btn active" data-anchor="leftEye">Left</button>
                         <button class="control-btn anchor-btn" data-anchor="rightEye">Right</button>
@@ -459,7 +460,15 @@
                     <div class="edit-status" id="editStatus">Tap on LEFT side of mask for left eye</div>
                     <div class="edit-actions">
                         <button class="control-btn" id="resetPointsBtn">Reset All</button>
+                        <button class="control-btn" id="textureBtn">Change Texture</button>
                         <button class="control-btn success" id="saveEditBtn">Save Changes</button>
+                    </div>
+                </div>
+                <div class="edit-controls hidden" id="textureControls">
+                    <div class="edit-status" id="textureStatus">Point camera at texture and tap Capture</div>
+                    <div class="edit-actions">
+                        <button class="control-btn" id="cancelTextureBtn">Cancel</button>
+                        <button class="control-btn success" id="captureTextureBtn">Capture Texture</button>
                     </div>
                 </div>
             </div>
@@ -956,6 +965,11 @@
         }
 
         function closeEditMask() {
+            // Stop texture mode if active
+            if (textureStream) {
+                stopTextureMode();
+            }
+
             document.getElementById('editMaskOverlay').classList.add('hidden');
             // Restart tracking
             if (faceLandmarker) {
@@ -1080,6 +1094,154 @@
 
             closeEditMask();
             updateStatus('track', 'Mask saved with updated anchor points!');
+        }
+
+        // ============================================
+        // TEXTURE MODE
+        // ============================================
+
+        let textureVideo = null;
+        let textureStream = null;
+        let textureAnimationId = null;
+        let maskAlphaData = null;  // Store the mask's alpha channel
+
+        async function startTextureMode() {
+            try {
+                // Store the mask's alpha channel before we start
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = loadedMask.width;
+                tempCanvas.height = loadedMask.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.drawImage(maskImage, 0, 0);
+                maskAlphaData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+                // Start rear camera
+                textureStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+                    audio: false
+                });
+
+                textureVideo = document.getElementById('textureVideo');
+                textureVideo.srcObject = textureStream;
+                await new Promise(r => textureVideo.onloadedmetadata = r);
+                await textureVideo.play();
+
+                // Show texture controls, hide anchor controls
+                document.getElementById('anchorControls').classList.add('hidden');
+                document.getElementById('textureControls').classList.remove('hidden');
+
+                // Start render loop
+                renderTexturePreview();
+
+            } catch (error) {
+                console.error('Texture camera error:', error);
+                document.getElementById('textureStatus').textContent = 'Camera error: ' + error.message;
+            }
+        }
+
+        function stopTextureMode() {
+            if (textureAnimationId) {
+                cancelAnimationFrame(textureAnimationId);
+                textureAnimationId = null;
+            }
+            if (textureStream) {
+                textureStream.getTracks().forEach(t => t.stop());
+                textureStream = null;
+            }
+            if (textureVideo) {
+                textureVideo.srcObject = null;
+            }
+
+            // Show anchor controls, hide texture controls
+            document.getElementById('anchorControls').classList.remove('hidden');
+            document.getElementById('textureControls').classList.add('hidden');
+
+            // Redraw original mask
+            drawEditMask();
+        }
+
+        function renderTexturePreview() {
+            if (!textureStream || !textureVideo || !editCtx) {
+                return;
+            }
+
+            const width = editCanvas.width;
+            const height = editCanvas.height;
+
+            // Clear canvas
+            editCtx.clearRect(0, 0, width, height);
+
+            // Calculate how to fit camera frame into mask dimensions
+            const videoAspect = textureVideo.videoWidth / textureVideo.videoHeight;
+            const maskAspect = width / height;
+
+            let sx = 0, sy = 0, sw = textureVideo.videoWidth, sh = textureVideo.videoHeight;
+
+            // Crop video to match mask aspect ratio (center crop)
+            if (videoAspect > maskAspect) {
+                // Video is wider - crop sides
+                sw = textureVideo.videoHeight * maskAspect;
+                sx = (textureVideo.videoWidth - sw) / 2;
+            } else {
+                // Video is taller - crop top/bottom
+                sh = textureVideo.videoWidth / maskAspect;
+                sy = (textureVideo.videoHeight - sh) / 2;
+            }
+
+            // Draw camera frame
+            editCtx.drawImage(textureVideo, sx, sy, sw, sh, 0, 0, width, height);
+
+            // Apply mask alpha channel
+            const frameData = editCtx.getImageData(0, 0, width, height);
+            const framePixels = frameData.data;
+            const maskPixels = maskAlphaData.data;
+
+            for (let i = 0; i < framePixels.length; i += 4) {
+                // Copy alpha from mask to frame
+                framePixels[i + 3] = maskPixels[i + 3];
+            }
+
+            editCtx.putImageData(frameData, 0, 0);
+
+            textureAnimationId = requestAnimationFrame(renderTexturePreview);
+        }
+
+        function captureTexture() {
+            if (!textureStream || !editCtx) return;
+
+            // Stop the animation but keep the last frame
+            if (textureAnimationId) {
+                cancelAnimationFrame(textureAnimationId);
+                textureAnimationId = null;
+            }
+
+            // The current canvas content is our new texture
+            // Create a new image from it
+            const newImageUrl = editCanvas.toDataURL('image/png');
+            const newImg = new Image();
+            newImg.onload = () => {
+                // Update the mask image
+                maskImage = newImg;
+
+                // Stop camera
+                if (textureStream) {
+                    textureStream.getTracks().forEach(t => t.stop());
+                    textureStream = null;
+                }
+                if (textureVideo) {
+                    textureVideo.srcObject = null;
+                }
+
+                // Show anchor controls, hide texture controls
+                document.getElementById('anchorControls').classList.remove('hidden');
+                document.getElementById('textureControls').classList.add('hidden');
+
+                // Redraw with new texture
+                drawEditMask();
+
+                document.getElementById('editStatus').textContent = 'Texture captured! Save to keep changes.';
+            };
+            newImg.src = newImageUrl;
         }
 
         // ============================================
@@ -1745,6 +1907,9 @@
         });
 
         document.getElementById('editMaskCanvas').addEventListener('click', (e) => {
+            // Don't place anchors in texture mode
+            if (textureStream) return;
+
             const canvas = e.target;
             const rect = canvas.getBoundingClientRect();
             const scaleX = canvas.width / rect.width;
@@ -1753,6 +1918,11 @@
             const canvasY = (e.clientY - rect.top) * scaleY;
             placeEditAnchor(canvasX, canvasY);
         });
+
+        // Texture mode buttons
+        document.getElementById('textureBtn').addEventListener('click', startTextureMode);
+        document.getElementById('cancelTextureBtn').addEventListener('click', stopTextureMode);
+        document.getElementById('captureTextureBtn').addEventListener('click', captureTexture);
 
         document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
