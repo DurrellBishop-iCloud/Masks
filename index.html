@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <title>Face Overlay Mirror</title>
+    <title>Face Tracking Debug</title>
     <style>
         * {
             margin: 0;
@@ -49,43 +49,17 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Mirror for selfie view */
+            transform: scaleX(-1);
             -webkit-transform: scaleX(-1);
-            background: #222;
         }
 
-        /* iOS Safari fix */
-        video::-webkit-media-controls {
-            display: none !important;
-        }
-
-        .overlay-layer {
+        #debugCanvas {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
             pointer-events: none;
-        }
-
-        .face-overlay {
-            position: absolute;
-            transform-origin: center center;
-            pointer-events: none;
-            will-change: transform;
-            /* Hide until positioned */
-            opacity: 0;
-            transition: opacity 0.15s ease;
-        }
-
-        .face-overlay.visible {
-            opacity: 1;
-        }
-
-        .face-overlay img {
-            display: block;
-            width: 100%;
-            height: auto;
         }
 
         .controls {
@@ -134,48 +108,6 @@
             background: #0f0f1a;
         }
 
-        .upload-section {
-            padding: 12px;
-            background: #1a1a2e;
-            border-top: 1px solid #333;
-        }
-
-        .upload-row {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .upload-label {
-            font-size: 12px;
-            color: #aaa;
-        }
-
-        #fileInput {
-            display: none;
-        }
-
-        .upload-btn {
-            padding: 8px 14px;
-            background: #0f3460;
-            border: 1px dashed #4a5568;
-            border-radius: 8px;
-            color: white;
-            font-size: 12px;
-            cursor: pointer;
-        }
-
-        select {
-            padding: 8px 12px;
-            background: #0f3460;
-            border: 1px solid #4a5568;
-            border-radius: 8px;
-            color: white;
-            font-size: 12px;
-        }
-
-        /* Loading overlay */
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -218,9 +150,7 @@
     <div class="container">
         <div class="mirror-container">
             <video id="video" autoplay playsinline muted></video>
-            <div class="overlay-layer" id="overlayLayer">
-                <!-- Dynamic overlay elements will be added here -->
-            </div>
+            <canvas id="debugCanvas"></canvas>
             <div class="loading-overlay" id="loadingOverlay">
                 <div class="spinner"></div>
                 <div class="loading-text" id="loadingText">Initializing...</div>
@@ -231,20 +161,6 @@
             <button class="control-btn" id="startBtn">Start Camera</button>
         </div>
 
-        <div class="upload-section">
-            <div class="upload-row">
-                <label class="upload-btn" for="fileInput">Upload Overlay</label>
-                <input type="file" id="fileInput" accept="image/png,image/svg+xml">
-                <select id="anchorType">
-                    <option value="eyes">Eyes (glasses/mask)</option>
-                    <option value="mouth">Mouth (moustache)</option>
-                    <option value="nose">Nose (clown nose)</option>
-                    <option value="forehead">Forehead (hair/hat)</option>
-                    <option value="fullface">Full Face</option>
-                </select>
-            </div>
-        </div>
-
         <div class="status" id="status">Ready - Tap "Start Camera" to begin</div>
     </div>
 
@@ -252,55 +168,37 @@
         import { FaceLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.8/+esm';
 
         // ============================================
-        // CONFIGURATION
+        // LANDMARK INDICES (MediaPipe 478 landmarks)
         // ============================================
 
-        // Overlay configuration schema
-        const OVERLAY_CONFIGS = {
-            eyes: {
-                // For glasses, eye masks, domino masks
-                anchorLandmarks: { left: 33, right: 263 }, // outer eye corners
-                offsetY: 0,        // offset in eye-distance units (negative = up)
-                offsetX: 0,
-                baseScale: 2.5,    // scale multiplier relative to eye distance
-                transformOrigin: 'center center'
-            },
-            mouth: {
-                // For moustaches, lip overlays
-                anchorLandmarks: { left: 61, right: 291 }, // mouth corners
-                offsetY: -0.1,     // slight upward offset
-                offsetX: 0,
-                baseScale: 1.8,
-                transformOrigin: 'center center'
-            },
-            forehead: {
-                // For hair, hats, crowns
-                anchorLandmarks: { left: 33, right: 263 }, // use eyes as reference
-                offsetY: -1.5,     // move up significantly
-                offsetX: 0,
-                baseScale: 3.0,
-                transformOrigin: 'center bottom' // pivot from bottom of hair
-            },
-            fullface: {
-                // For full face masks
-                anchorLandmarks: { left: 33, right: 263 },
-                offsetY: 0.5,      // center on face
-                offsetX: 0,
-                baseScale: 4.0,
-                transformOrigin: 'center center'
-            },
-            nose: {
-                // For clown noses, animal snouts
-                anchorLandmarks: { left: 33, right: 263 }, // use eyes as reference
-                offsetY: 0.6,      // move down to nose position
-                offsetX: 0,
-                baseScale: 0.8,
-                transformOrigin: 'center center'
-            }
-        };
+        // Eyes - iris centers
+        const LEFT_EYE_CENTER = 468;   // Left iris center
+        const RIGHT_EYE_CENTER = 473;  // Right iris center
 
-        // Smoothing factor (0-1, lower = smoother but more lag)
-        const SMOOTHING_ALPHA = 0.3;
+        // Eye corners
+        const LEFT_EYE_INNER = 133;
+        const LEFT_EYE_OUTER = 33;
+        const RIGHT_EYE_INNER = 362;
+        const RIGHT_EYE_OUTER = 263;
+
+        // Mouth landmarks
+        const MOUTH_LEFT = 61;
+        const MOUTH_RIGHT = 291;
+        const UPPER_LIP_TOP = 13;
+        const LOWER_LIP_BOTTOM = 14;
+
+        // Face oval (silhouette) - key points
+        const FACE_OVAL = [
+            10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
+            397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
+            172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109
+        ];
+
+        // Ears (approximate - using face contour near ears)
+        const LEFT_EAR_TOP = 127;
+        const LEFT_EAR_BOTTOM = 234;
+        const RIGHT_EAR_TOP = 356;
+        const RIGHT_EAR_BOTTOM = 454;
 
         // ============================================
         // STATE
@@ -308,23 +206,10 @@
 
         let faceLandmarker = null;
         let video = null;
+        let canvas = null;
+        let ctx = null;
         let isRunning = false;
         let animationId = null;
-        let videoWidth = 0;
-        let videoHeight = 0;
-
-        // Active overlays
-        const activeOverlays = new Map(); // id -> { element, config, smoothed }
-
-        // Smoothed values per overlay
-        function createSmoothedState() {
-            return {
-                x: null,
-                y: null,
-                rotation: null,
-                scale: null
-            };
-        }
 
         // ============================================
         // INITIALIZATION
@@ -345,7 +230,9 @@
                 runningMode: 'VIDEO',
                 numFaces: 1,
                 minFaceDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
+                minTrackingConfidence: 0.5,
+                outputFaceBlendshapes: false,
+                outputFacialTransformationMatrixes: false
             });
 
             updateStatus('Model loaded - Ready to start');
@@ -371,22 +258,22 @@
                 video.srcObject = stream;
 
                 await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        videoWidth = video.videoWidth;
-                        videoHeight = video.videoHeight;
-                        resolve();
-                    };
+                    video.onloadedmetadata = () => resolve();
                 });
 
                 await video.play();
+
+                // Setup canvas
+                canvas = document.getElementById('debugCanvas');
+                ctx = canvas.getContext('2d');
+                resizeCanvas();
 
                 hideLoading();
                 isRunning = true;
                 document.getElementById('startBtn').textContent = 'Stop Camera';
                 document.getElementById('startBtn').classList.add('active');
-                updateStatus('Camera active - Face tracking running');
+                updateStatus('Face tracking active');
 
-                // Start detection loop
                 detectFaces();
 
             } catch (error) {
@@ -409,18 +296,24 @@
                 video.srcObject = null;
             }
 
-            // Hide all overlays
-            activeOverlays.forEach(overlay => {
-                overlay.element.classList.remove('visible');
-            });
+            if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
 
             document.getElementById('startBtn').textContent = 'Start Camera';
             document.getElementById('startBtn').classList.remove('active');
             updateStatus('Camera stopped');
         }
 
+        function resizeCanvas() {
+            const container = document.querySelector('.mirror-container');
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+
         // ============================================
-        // FACE DETECTION LOOP
+        // FACE DETECTION & DRAWING
         // ============================================
 
         function detectFaces() {
@@ -431,14 +324,12 @@
             try {
                 const results = faceLandmarker.detectForVideo(video, startTime);
 
+                // Clear canvas
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
                 if (results.faceLandmarks && results.faceLandmarks.length > 0) {
                     const landmarks = results.faceLandmarks[0];
-                    updateOverlays(landmarks);
-                } else {
-                    // No face detected - hide overlays
-                    activeOverlays.forEach(overlay => {
-                        overlay.element.classList.remove('visible');
-                    });
+                    drawDebugOverlay(landmarks);
                 }
             } catch (error) {
                 console.error('Detection error:', error);
@@ -447,191 +338,118 @@
             animationId = requestAnimationFrame(detectFaces);
         }
 
-        // ============================================
-        // OVERLAY TRANSFORM CALCULATIONS
-        // ============================================
+        function drawDebugOverlay(landmarks) {
+            const w = canvas.width;
+            const h = canvas.height;
 
-        function updateOverlays(landmarks) {
-            const containerRect = document.querySelector('.mirror-container').getBoundingClientRect();
-
-            activeOverlays.forEach((overlay, id) => {
-                const config = overlay.config;
-                const anchorConfig = OVERLAY_CONFIGS[config.anchorType];
-
-                // Get anchor landmarks
-                const leftLandmark = landmarks[anchorConfig.anchorLandmarks.left];
-                const rightLandmark = landmarks[anchorConfig.anchorLandmarks.right];
-
-                if (!leftLandmark || !rightLandmark) return;
-
-                // Convert normalized coordinates to pixel coordinates
-                // Note: landmarks are in normalized [0,1] space
-                // We need to mirror X because video is mirrored with CSS
-                const leftX = (1 - leftLandmark.x) * containerRect.width;
-                const leftY = leftLandmark.y * containerRect.height;
-                const rightX = (1 - rightLandmark.x) * containerRect.width;
-                const rightY = rightLandmark.y * containerRect.height;
-
-                // Calculate center point
-                let centerX = (leftX + rightX) / 2;
-                let centerY = (leftY + rightY) / 2;
-
-                // Calculate distance (for scaling)
-                const dx = leftX - rightX;  // Swapped for mirrored view
-                const dy = leftY - rightY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                // Calculate rotation (roll) from eye line
-                // Use leftX - rightX because after mirroring, left eye is on screen-right
-                const rotation = Math.atan2(dy, dx);
-
-                // Calculate scale based on distance
-                const referenceDistance = 100; // baseline eye distance in pixels
-                const scale = (distance / referenceDistance) * anchorConfig.baseScale * (config.scaleMultiplier || 1);
-
-                // Apply offset (in eye-distance units)
-                const offsetX = (anchorConfig.offsetX + (config.offsetX || 0)) * distance;
-                const offsetY = (anchorConfig.offsetY + (config.offsetY || 0)) * distance;
-
-                // Rotate offset by current rotation
-                const cosR = Math.cos(rotation);
-                const sinR = Math.sin(rotation);
-                centerX += offsetX * cosR - offsetY * sinR;
-                centerY += offsetX * sinR + offsetY * cosR;
-
-                // Apply smoothing
-                const smoothed = overlay.smoothed;
-                if (smoothed.x === null) {
-                    // First frame - initialize without smoothing
-                    smoothed.x = centerX;
-                    smoothed.y = centerY;
-                    smoothed.rotation = rotation;
-                    smoothed.scale = scale;
-                } else {
-                    // Lerp towards new values
-                    smoothed.x = lerp(smoothed.x, centerX, SMOOTHING_ALPHA);
-                    smoothed.y = lerp(smoothed.y, centerY, SMOOTHING_ALPHA);
-                    smoothed.rotation = lerpAngle(smoothed.rotation, rotation, SMOOTHING_ALPHA);
-                    smoothed.scale = lerp(smoothed.scale, scale, SMOOTHING_ALPHA);
-                }
-
-                // Apply transform to element
-                const element = overlay.element;
-                const originX = element.offsetWidth / 2;
-                const originY = element.offsetHeight / 2;
-
-                // Build transform
-                // We translate to position, then rotate, then scale
-                // The element should be centered on the anchor point
-                element.style.transform = `
-                    translate(${smoothed.x - originX}px, ${smoothed.y - originY}px)
-                    rotate(${smoothed.rotation}rad)
-                    scale(${smoothed.scale})
-                `;
-                element.style.transformOrigin = anchorConfig.transformOrigin || 'center center';
-                element.classList.add('visible');
-            });
-        }
-
-        // Linear interpolation
-        function lerp(a, b, t) {
-            return a + (b - a) * t;
-        }
-
-        // Angle interpolation (handles wrap-around)
-        function lerpAngle(a, b, t) {
-            let diff = b - a;
-            while (diff > Math.PI) diff -= 2 * Math.PI;
-            while (diff < -Math.PI) diff += 2 * Math.PI;
-            return a + diff * t;
-        }
-
-        // ============================================
-        // OVERLAY MANAGEMENT
-        // ============================================
-
-        function addOverlay(imageUrl, anchorType, options = {}) {
-            const id = 'overlay-' + Date.now();
-
-            const element = document.createElement('div');
-            element.className = 'face-overlay';
-            element.id = id;
-
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.alt = 'Face overlay';
-            element.appendChild(img);
-
-            // Wait for image to load to get dimensions
-            img.onload = () => {
-                // Set a base size (will be scaled by transform)
-                const baseWidth = 100; // pixels at scale 1
-                element.style.width = baseWidth + 'px';
+            // Helper to convert landmark to mirrored canvas coordinates
+            const toCanvas = (idx) => {
+                const lm = landmarks[idx];
+                return {
+                    x: (1 - lm.x) * w,  // Mirror X
+                    y: lm.y * h
+                };
             };
 
-            document.getElementById('overlayLayer').appendChild(element);
+            // ---- 1. FACE OVAL (thin outline) ----
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.7)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
 
-            const config = {
-                anchorType: anchorType,
-                scaleMultiplier: options.scaleMultiplier || 1,
-                offsetX: options.offsetX || 0,
-                offsetY: options.offsetY || 0
-            };
+            const firstOval = toCanvas(FACE_OVAL[0]);
+            ctx.moveTo(firstOval.x, firstOval.y);
 
-            activeOverlays.set(id, {
-                element: element,
-                config: config,
-                smoothed: createSmoothedState()
-            });
-
-            // Add control button
-            addOverlayButton(id, anchorType);
-
-            return id;
-        }
-
-        function removeOverlay(id) {
-            const overlay = activeOverlays.get(id);
-            if (overlay) {
-                overlay.element.remove();
-                activeOverlays.delete(id);
+            for (let i = 1; i < FACE_OVAL.length; i++) {
+                const pt = toCanvas(FACE_OVAL[i]);
+                ctx.lineTo(pt.x, pt.y);
             }
+            ctx.closePath();
+            ctx.stroke();
 
-            // Remove button
-            const btn = document.getElementById('btn-' + id);
-            if (btn) btn.remove();
+            // ---- 2. EYE DOTS (exact positions) ----
+            ctx.fillStyle = '#00ff00';
+
+            // Left eye center
+            const leftEye = toCanvas(LEFT_EYE_CENTER);
+            ctx.beginPath();
+            ctx.arc(leftEye.x, leftEye.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Right eye center
+            const rightEye = toCanvas(RIGHT_EYE_CENTER);
+            ctx.beginPath();
+            ctx.arc(rightEye.x, rightEye.y, 6, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eye corners (smaller dots)
+            ctx.fillStyle = '#ffff00';
+            [LEFT_EYE_INNER, LEFT_EYE_OUTER, RIGHT_EYE_INNER, RIGHT_EYE_OUTER].forEach(idx => {
+                const pt = toCanvas(idx);
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // ---- 3. MOUTH LINE ----
+            const mouthLeft = toCanvas(MOUTH_LEFT);
+            const mouthRight = toCanvas(MOUTH_RIGHT);
+            const upperLip = toCanvas(UPPER_LIP_TOP);
+            const lowerLip = toCanvas(LOWER_LIP_BOTTOM);
+
+            // Horizontal line across mouth
+            ctx.strokeStyle = '#ff00ff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(mouthLeft.x, mouthLeft.y);
+            ctx.lineTo(mouthRight.x, mouthRight.y);
+            ctx.stroke();
+
+            // Mouth corners dots
+            ctx.fillStyle = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(mouthLeft.x, mouthLeft.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(mouthRight.x, mouthRight.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Upper and lower lip dots
+            ctx.fillStyle = '#ff6600';
+            ctx.beginPath();
+            ctx.arc(upperLip.x, upperLip.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(lowerLip.x, lowerLip.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // ---- 4. EAR LINES ----
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 3;
+
+            // Left ear
+            const leftEarTop = toCanvas(LEFT_EAR_TOP);
+            const leftEarBottom = toCanvas(LEFT_EAR_BOTTOM);
+            ctx.beginPath();
+            ctx.moveTo(leftEarTop.x, leftEarTop.y);
+            ctx.lineTo(leftEarBottom.x, leftEarBottom.y);
+            ctx.stroke();
+
+            // Right ear
+            const rightEarTop = toCanvas(RIGHT_EAR_TOP);
+            const rightEarBottom = toCanvas(RIGHT_EAR_BOTTOM);
+            ctx.beginPath();
+            ctx.moveTo(rightEarTop.x, rightEarTop.y);
+            ctx.lineTo(rightEarBottom.x, rightEarBottom.y);
+            ctx.stroke();
+
+            // Ear endpoint dots
+            ctx.fillStyle = '#ffff00';
+            [leftEarTop, leftEarBottom, rightEarTop, rightEarBottom].forEach(pt => {
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
         }
-
-        function addOverlayButton(id, type) {
-            const controls = document.getElementById('controls');
-            const btn = document.createElement('button');
-            btn.className = 'control-btn active';
-            btn.id = 'btn-' + id;
-            btn.textContent = type.charAt(0).toUpperCase() + type.slice(1) + ' X';
-            btn.onclick = () => removeOverlay(id);
-            controls.appendChild(btn);
-        }
-
-        // ============================================
-        // FILE UPLOAD HANDLING
-        // ============================================
-
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const anchorType = document.getElementById('anchorType').value;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                addOverlay(event.target.result, anchorType);
-                updateStatus(`Added ${anchorType} overlay`);
-            };
-            reader.readAsDataURL(file);
-
-            // Reset input so same file can be uploaded again
-            e.target.value = '';
-        });
 
         // ============================================
         // UI HELPERS
@@ -662,96 +480,9 @@
             }
         });
 
-        // ============================================
-        // DEMO OVERLAYS
-        // ============================================
-
-        // Sample overlay definitions
-        const SAMPLE_OVERLAYS = [
-            {
-                name: 'Glasses',
-                file: 'overlays/star-glasses.svg',
-                anchor: 'eyes',
-                options: { scaleMultiplier: 1.0 }
-            },
-            {
-                name: 'Hero Mask',
-                file: 'overlays/superhero-mask.svg',
-                anchor: 'eyes',
-                options: { scaleMultiplier: 1.1, offsetY: 0.05 }
-            },
-            {
-                name: 'Cat Ears',
-                file: 'overlays/cat-ears.svg',
-                anchor: 'forehead',
-                options: { scaleMultiplier: 1.2, offsetY: -0.3 }
-            },
-            {
-                name: 'Crown',
-                file: 'overlays/crown.svg',
-                anchor: 'forehead',
-                options: { scaleMultiplier: 1.0 }
-            },
-            {
-                name: 'Moustache',
-                file: 'overlays/handlebar-moustache.svg',
-                anchor: 'mouth',
-                options: { scaleMultiplier: 1.0 }
-            },
-            {
-                name: 'Clown Nose',
-                file: 'overlays/clown-nose.svg',
-                anchor: 'nose',
-                options: { scaleMultiplier: 1.0 }
-            },
-            {
-                name: 'Dog Face',
-                file: 'overlays/dog-face.svg',
-                anchor: 'fullface',
-                options: { scaleMultiplier: 0.9, offsetY: 0.1 }
-            }
-        ];
-
-        function addDemoOverlays() {
-            const controls = document.getElementById('controls');
-
-            // Add a separator
-            const separator = document.createElement('div');
-            separator.style.cssText = 'width:100%;height:1px;background:#333;margin:4px 0;';
-            controls.appendChild(separator);
-
-            // Add label
-            const label = document.createElement('span');
-            label.textContent = 'Samples:';
-            label.style.cssText = 'font-size:11px;color:#666;margin-right:4px;';
-            controls.appendChild(label);
-
-            // Add buttons for each sample overlay
-            SAMPLE_OVERLAYS.forEach(overlay => {
-                const btn = document.createElement('button');
-                btn.className = 'control-btn';
-                btn.textContent = overlay.name;
-                btn.style.fontSize = '12px';
-                btn.style.padding = '6px 10px';
-                btn.onclick = () => {
-                    addOverlay(overlay.file, overlay.anchor, overlay.options);
-                    updateStatus(`Added ${overlay.name}`);
-                };
-                controls.appendChild(btn);
-            });
-
-            // Add clear all button
-            const clearBtn = document.createElement('button');
-            clearBtn.className = 'control-btn';
-            clearBtn.textContent = 'Clear All';
-            clearBtn.style.cssText = 'font-size:12px;padding:6px 10px;background:#8b0000;';
-            clearBtn.onclick = () => {
-                const ids = Array.from(activeOverlays.keys());
-                ids.forEach(id => removeOverlay(id));
-                updateStatus('All overlays removed');
-            };
-            controls.appendChild(clearBtn);
-        }
+        window.addEventListener('resize', () => {
+            if (canvas) resizeCanvas();
+        });
 
         // ============================================
         // INITIALIZATION
@@ -763,18 +494,10 @@
 
             try {
                 await initializeFaceLandmarker();
-                addDemoOverlays();
             } catch (error) {
                 console.error('Initialization error:', error);
                 updateStatus('Error loading: ' + error.message);
                 hideLoading();
-            }
-        });
-
-        // Handle visibility change (pause when tab hidden)
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden && isRunning) {
-                // Optionally pause detection when hidden
             }
         });
     </script>
