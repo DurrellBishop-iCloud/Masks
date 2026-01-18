@@ -334,7 +334,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.2</div>
+    <div class="version-tag">v2.3</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -451,6 +451,9 @@
         // Eye point placement state
         let eyePointMode = false;
         let eyePoints = { left: null, right: null };
+
+        // Current mask state (after background removal and hole cuts)
+        let currentMaskData = null;
 
         // Loaded mask for face tracking
         let loadedMask = null;  // { image: HTMLImageElement, anchors: { leftEye, rightEye } }
@@ -887,6 +890,7 @@
 
         function retakePhoto() {
             originalImageData = null;
+            currentMaskData = null;
             eyePoints = { left: null, right: null };
             eyePointMode = false;
             document.getElementById('pointsInfo').classList.add('hidden');
@@ -961,6 +965,9 @@
             previewCtx.putImageData(result.imageData, 0, 0);
             document.getElementById('saveMaskBtn').classList.remove('hidden');
 
+            // Save current state for later use (eye point markers)
+            currentMaskData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
             const blobSize = biggestBlob ? biggestBlob.size : 0;
             updateStatus('capture', `Kept largest blob (${blobSize} pixels), removed ${removed} others. Tap inside to cut holes.`);
         }
@@ -1024,6 +1031,10 @@
             }
 
             previewCtx.putImageData(imageData, 0, 0);
+
+            // Save current state for later use (eye point markers)
+            currentMaskData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
+
             updateStatus('capture', `Cut hole (${filledCount} pixels). Tap again or Save.`);
         }
 
@@ -1346,10 +1357,10 @@
         }
 
         function drawEyePointMarkers() {
-            if (!previewCanvas || !previewCtx || !originalImageData) return;
+            if (!previewCanvas || !previewCtx || !currentMaskData) return;
 
-            // Redraw the background-removed image first
-            removeBackground();
+            // Redraw the current mask state (preserves hole cuts)
+            previewCtx.putImageData(currentMaskData, 0, 0);
 
             // Now draw eye point markers on top
             if (eyePoints.left) {
