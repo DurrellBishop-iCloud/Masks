@@ -337,7 +337,8 @@
 
             <div class="controls hidden" id="editControls">
                 <button class="control-btn" id="retakeBtn">Retake</button>
-                <button class="control-btn primary" id="removeBackgroundBtn">Remove Background</button>
+                <button class="control-btn primary" id="autoCutBtn">Auto Cut</button>
+                <button class="control-btn" id="removeBackgroundBtn">Manual</button>
                 <button class="control-btn success hidden" id="saveMaskBtn">Save Mask</button>
             </div>
 
@@ -694,13 +695,61 @@
             startCaptureCamera();
         }
 
-        function removeBackground() {
+        function removeBackground(autoTune = false) {
             if (!originalImageData) return;
 
-            updateStatus('capture', 'Removing background...');
+            if (autoTune) {
+                updateStatus('capture', 'Auto-tuning tolerance...');
+                autoTuneAndRemove();
+                return;
+            }
 
             const tolerance = parseInt(document.getElementById('toleranceSlider').value);
+            const result = doFloodFill(tolerance);
 
+            previewCtx.putImageData(result.imageData, 0, 0);
+
+            document.getElementById('saveMaskBtn').classList.remove('hidden');
+            updateStatus('capture', `Done! Tolerance: ${tolerance}, Edge pixels remaining: ${result.edgeOpaqueCount}`);
+        }
+
+        function autoTuneAndRemove() {
+            const minTol = 10;
+            const maxTol = 200;
+            const step = 10;
+            const maxEdgePixelsAllowed = 50; // Allow tiny bit of noise
+
+            let bestTolerance = minTol;
+            let bestResult = null;
+
+            for (let tol = minTol; tol <= maxTol; tol += step) {
+                const result = doFloodFill(tol);
+
+                // Check if edges are clean enough
+                if (result.edgeOpaqueCount <= maxEdgePixelsAllowed) {
+                    bestTolerance = tol;
+                    bestResult = result;
+                    break;
+                }
+
+                // Keep track in case we never get clean edges
+                if (!bestResult || result.edgeOpaqueCount < bestResult.edgeOpaqueCount) {
+                    bestTolerance = tol;
+                    bestResult = result;
+                }
+            }
+
+            // Update slider to show what we found
+            document.getElementById('toleranceSlider').value = bestTolerance;
+            document.getElementById('toleranceValue').textContent = bestTolerance;
+
+            previewCtx.putImageData(bestResult.imageData, 0, 0);
+
+            document.getElementById('saveMaskBtn').classList.remove('hidden');
+            updateStatus('capture', `Auto-tuned! Tolerance: ${bestTolerance}, Edge pixels: ${bestResult.edgeOpaqueCount}`);
+        }
+
+        function doFloodFill(tolerance) {
             // Clone original data
             const imageData = new ImageData(
                 new Uint8ClampedArray(originalImageData.data),
@@ -713,32 +762,35 @@
             const height = imageData.height;
 
             // Sample background color from corners
-            const bgColor = sampleBackgroundColor(data, width, height);
+            const bgColor = sampleBackgroundColor(originalImageData.data, width, height);
 
             // Create visited array for flood fill
             const visited = new Uint8Array(width * height);
 
-            // Flood fill from all edges
+            // Flood fill from all edges using a more efficient approach
             const queue = [];
 
             // Add edge pixels to queue
             for (let x = 0; x < width; x++) {
-                queue.push([x, 0]);
-                queue.push([x, height - 1]);
+                queue.push(x); // top row: y=0
+                queue.push((height - 1) * width + x); // bottom row
             }
-            for (let y = 0; y < height; y++) {
-                queue.push([0, y]);
-                queue.push([width - 1, y]);
+            for (let y = 1; y < height - 1; y++) {
+                queue.push(y * width); // left column
+                queue.push(y * width + width - 1); // right column
             }
 
-            // Flood fill
-            while (queue.length > 0) {
-                const [x, y] = queue.shift();
+            // Flood fill using index-based queue (faster)
+            let head = 0;
+            while (head < queue.length) {
+                const idx = queue[head++];
+
+                if (visited[idx]) continue;
+
+                const x = idx % width;
+                const y = Math.floor(idx / width);
 
                 if (x < 0 || x >= width || y < 0 || y >= height) continue;
-
-                const idx = y * width + x;
-                if (visited[idx]) continue;
 
                 const pixelIdx = idx * 4;
                 const r = data[pixelIdx];
@@ -750,22 +802,29 @@
                     visited[idx] = 1;
                     data[pixelIdx + 3] = 0; // Make transparent
 
-                    // Add neighbors
-                    queue.push([x + 1, y]);
-                    queue.push([x - 1, y]);
-                    queue.push([x, y + 1]);
-                    queue.push([x, y - 1]);
+                    // Add neighbors (bounds checking done at start of loop)
+                    if (x > 0) queue.push(idx - 1);
+                    if (x < width - 1) queue.push(idx + 1);
+                    if (y > 0) queue.push(idx - width);
+                    if (y < height - 1) queue.push(idx + width);
                 }
             }
 
-            // Optional: Clean up edges (erode then dilate transparency slightly)
-            // Skip for now, can add later
+            // Count opaque pixels remaining on edges
+            let edgeOpaqueCount = 0;
 
-            // Put processed image back
-            previewCtx.putImageData(imageData, 0, 0);
+            // Top and bottom rows
+            for (let x = 0; x < width; x++) {
+                if (data[x * 4 + 3] > 0) edgeOpaqueCount++;
+                if (data[((height - 1) * width + x) * 4 + 3] > 0) edgeOpaqueCount++;
+            }
+            // Left and right columns (excluding corners already counted)
+            for (let y = 1; y < height - 1; y++) {
+                if (data[(y * width) * 4 + 3] > 0) edgeOpaqueCount++;
+                if (data[(y * width + width - 1) * 4 + 3] > 0) edgeOpaqueCount++;
+            }
 
-            document.getElementById('saveMaskBtn').classList.remove('hidden');
-            updateStatus('capture', 'Background removed! Adjust tolerance if needed, or Save Mask');
+            return { imageData, edgeOpaqueCount };
         }
 
         function sampleBackgroundColor(data, width, height) {
@@ -883,7 +942,8 @@
 
         document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
-        document.getElementById('removeBackgroundBtn').addEventListener('click', removeBackground);
+        document.getElementById('autoCutBtn').addEventListener('click', () => removeBackground(true));
+        document.getElementById('removeBackgroundBtn').addEventListener('click', () => removeBackground(false));
         document.getElementById('saveMaskBtn').addEventListener('click', saveMask);
 
         window.addEventListener('resize', () => {
