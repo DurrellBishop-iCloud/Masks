@@ -323,6 +323,87 @@
             background: #e67e22;
         }
 
+        /* Edit Mask Overlay */
+        .edit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a2e;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .edit-overlay.hidden {
+            display: none;
+        }
+
+        .edit-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0f0f1a;
+            font-weight: 600;
+        }
+
+        .edit-canvas-container {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #editMaskCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            cursor: crosshair;
+        }
+
+        .edit-controls {
+            padding: 12px;
+            background: #16213e;
+        }
+
+        .anchor-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .anchor-btn {
+            flex: 1;
+            opacity: 0.6;
+        }
+
+        .anchor-btn.active {
+            opacity: 1;
+            background: #e94560;
+        }
+
+        .anchor-btn.placed {
+            border: 2px solid #27ae60;
+        }
+
+        .edit-status {
+            text-align: center;
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 12px;
+        }
+
+        .edit-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .edit-actions button {
+            flex: 1;
+        }
+
         .version-tag {
             position: fixed;
             bottom: 5px;
@@ -334,7 +415,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.4</div>
+    <div class="version-tag">v2.5</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -357,7 +438,30 @@
                     Load Mask
                     <input type="file" id="loadMaskInput" accept=".json" style="display:none">
                 </label>
+                <button class="control-btn" id="editMaskBtn" style="display:none">Edit Mask</button>
                 <button class="control-btn" id="clearMaskBtn" style="display:none">Clear Mask</button>
+            </div>
+
+            <!-- Edit Mask Overlay -->
+            <div class="edit-overlay hidden" id="editMaskOverlay">
+                <div class="edit-header">
+                    <span>Edit Anchor Points</span>
+                    <button class="control-btn small" id="closeEditBtn">Cancel</button>
+                </div>
+                <div class="edit-canvas-container transparency-bg">
+                    <canvas id="editMaskCanvas"></canvas>
+                </div>
+                <div class="edit-controls">
+                    <div class="anchor-buttons">
+                        <button class="control-btn anchor-btn active" data-anchor="leftEye">Left Eye</button>
+                        <button class="control-btn anchor-btn" data-anchor="rightEye">Right Eye</button>
+                    </div>
+                    <div class="edit-status" id="editStatus">Tap on mask to place Left Eye</div>
+                    <div class="edit-actions">
+                        <button class="control-btn" id="resetPointsBtn">Reset All</button>
+                        <button class="control-btn success" id="saveEditBtn">Save Changes</button>
+                    </div>
+                </div>
             </div>
             <div class="status" id="trackStatus">Initializing...</div>
         </div>
@@ -791,7 +895,8 @@
                         anchors: data.anchors
                     };
                     document.getElementById('clearMaskBtn').style.display = 'inline-block';
-                    updateStatus('track', 'Mask loaded! Start camera to see it on your face.');
+                    document.getElementById('editMaskBtn').style.display = 'inline-block';
+                    updateStatus('track', 'Mask loaded!');
                 };
                 img.onerror = () => {
                     updateStatus('track', 'Error loading mask image');
@@ -808,7 +913,171 @@
             loadedMask = null;
             maskImage = null;
             document.getElementById('clearMaskBtn').style.display = 'none';
+            document.getElementById('editMaskBtn').style.display = 'none';
             updateStatus('track', 'Mask cleared');
+        }
+
+        // ============================================
+        // EDIT MASK
+        // ============================================
+
+        let editCanvas = null;
+        let editCtx = null;
+        let editAnchors = {};
+        let currentEditAnchor = 'leftEye';
+
+        function openEditMask() {
+            if (!loadedMask || !maskImage) return;
+
+            // Stop face tracking while editing
+            stopTracking();
+
+            // Copy current anchors for editing
+            editAnchors = {
+                leftEye: loadedMask.anchors.leftEye ? { ...loadedMask.anchors.leftEye } : null,
+                rightEye: loadedMask.anchors.rightEye ? { ...loadedMask.anchors.rightEye } : null
+            };
+
+            // Setup edit canvas
+            editCanvas = document.getElementById('editMaskCanvas');
+            editCtx = editCanvas.getContext('2d');
+            editCanvas.width = loadedMask.width;
+            editCanvas.height = loadedMask.height;
+
+            // Show overlay
+            document.getElementById('editMaskOverlay').classList.remove('hidden');
+
+            // Set initial anchor selection
+            currentEditAnchor = 'leftEye';
+            updateAnchorButtons();
+            drawEditMask();
+        }
+
+        function closeEditMask() {
+            document.getElementById('editMaskOverlay').classList.add('hidden');
+            // Restart tracking
+            if (faceLandmarker) {
+                startTracking();
+            }
+        }
+
+        function drawEditMask() {
+            if (!editCtx || !maskImage) return;
+
+            // Draw mask image
+            editCtx.clearRect(0, 0, editCanvas.width, editCanvas.height);
+            editCtx.drawImage(maskImage, 0, 0);
+
+            // Draw anchor points
+            if (editAnchors.leftEye) {
+                const x = editAnchors.leftEye.x * loadedMask.width;
+                const y = editAnchors.leftEye.y * loadedMask.height;
+                drawEditMarker(x, y, '#00ff00', 'L', currentEditAnchor === 'leftEye');
+            }
+            if (editAnchors.rightEye) {
+                const x = editAnchors.rightEye.x * loadedMask.width;
+                const y = editAnchors.rightEye.y * loadedMask.height;
+                drawEditMarker(x, y, '#00ff00', 'R', currentEditAnchor === 'rightEye');
+            }
+
+            updateEditStatus();
+        }
+
+        function drawEditMarker(x, y, color, label, isActive) {
+            const radius = Math.max(15, editCanvas.width * 0.02);
+
+            // Outer circle
+            editCtx.strokeStyle = isActive ? '#ffff00' : color;
+            editCtx.lineWidth = isActive ? 4 : 3;
+            editCtx.beginPath();
+            editCtx.arc(x, y, radius, 0, Math.PI * 2);
+            editCtx.stroke();
+
+            // Inner dot
+            editCtx.fillStyle = isActive ? '#ffff00' : color;
+            editCtx.beginPath();
+            editCtx.arc(x, y, 4, 0, Math.PI * 2);
+            editCtx.fill();
+
+            // Label
+            editCtx.font = `bold ${radius}px sans-serif`;
+            editCtx.fillStyle = isActive ? '#ffff00' : color;
+            editCtx.textAlign = 'center';
+            editCtx.textBaseline = 'middle';
+            editCtx.fillText(label, x, y + radius + 15);
+        }
+
+        function updateAnchorButtons() {
+            document.querySelectorAll('.anchor-btn').forEach(btn => {
+                const anchor = btn.dataset.anchor;
+                btn.classList.toggle('active', anchor === currentEditAnchor);
+                btn.classList.toggle('placed', editAnchors[anchor] !== null);
+            });
+        }
+
+        function updateEditStatus() {
+            const status = document.getElementById('editStatus');
+            const anchorName = currentEditAnchor === 'leftEye' ? 'Left Eye' : 'Right Eye';
+            if (editAnchors[currentEditAnchor]) {
+                status.textContent = `${anchorName} placed. Tap to reposition or select another anchor.`;
+            } else {
+                status.textContent = `Tap on mask to place ${anchorName}`;
+            }
+        }
+
+        function placeEditAnchor(canvasX, canvasY) {
+            // Convert to normalized coordinates
+            const normX = canvasX / loadedMask.width;
+            const normY = canvasY / loadedMask.height;
+
+            editAnchors[currentEditAnchor] = { x: normX, y: normY };
+
+            updateAnchorButtons();
+            drawEditMask();
+
+            // Auto-advance to next unplaced anchor
+            if (currentEditAnchor === 'leftEye' && !editAnchors.rightEye) {
+                currentEditAnchor = 'rightEye';
+                updateAnchorButtons();
+                updateEditStatus();
+            }
+        }
+
+        function resetEditAnchors() {
+            editAnchors = { leftEye: null, rightEye: null };
+            currentEditAnchor = 'leftEye';
+            updateAnchorButtons();
+            drawEditMask();
+        }
+
+        function saveEditedMask() {
+            if (!editAnchors.leftEye || !editAnchors.rightEye) {
+                document.getElementById('editStatus').textContent = 'Please place both eye points before saving';
+                return;
+            }
+
+            // Update the loaded mask with new anchors
+            loadedMask.anchors = { ...editAnchors };
+
+            // Save to file
+            const maskData = {
+                version: 1,
+                image: maskImage.src,
+                width: loadedMask.width,
+                height: loadedMask.height,
+                anchors: editAnchors
+            };
+
+            const jsonStr = JSON.stringify(maskData, null, 2);
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.download = 'mask-edited-' + Date.now() + '.json';
+            link.href = URL.createObjectURL(blob);
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            closeEditMask();
+            updateStatus('track', 'Mask saved with updated anchor points!');
         }
 
         // ============================================
@@ -1450,6 +1719,30 @@
         });
 
         document.getElementById('clearMaskBtn').addEventListener('click', clearLoadedMask);
+
+        // Edit Mask event handlers
+        document.getElementById('editMaskBtn').addEventListener('click', openEditMask);
+        document.getElementById('closeEditBtn').addEventListener('click', closeEditMask);
+        document.getElementById('resetPointsBtn').addEventListener('click', resetEditAnchors);
+        document.getElementById('saveEditBtn').addEventListener('click', saveEditedMask);
+
+        document.querySelectorAll('.anchor-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                currentEditAnchor = btn.dataset.anchor;
+                updateAnchorButtons();
+                drawEditMask();
+            });
+        });
+
+        document.getElementById('editMaskCanvas').addEventListener('click', (e) => {
+            const canvas = e.target;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const canvasX = (e.clientX - rect.left) * scaleX;
+            const canvasY = (e.clientY - rect.top) * scaleY;
+            placeEditAnchor(canvasX, canvasY);
+        });
 
         document.getElementById('takePhotoBtn').addEventListener('click', takePhoto);
         document.getElementById('retakeBtn').addEventListener('click', retakePhoto);
