@@ -47,21 +47,6 @@
       }
     },
     {
-      "id": "mask-1768744126560",
-      "name": "Book mask",
-      "image": "masks/images/mask-1768744126560.png",
-      "anchors": {
-        "leftEye": {
-          "x": 0.4328358208955224,
-          "y": 0.6254755345664438
-        },
-        "rightEye": {
-          "x": 0.5621890547263682,
-          "y": 0.6254755345664438
-        }
-      }
-    },
-    {
       "id": "mask-1768744272147",
       "name": "Book mask2",
       "image": "masks/images/mask-1768744272147.png",
