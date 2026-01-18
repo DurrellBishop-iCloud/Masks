@@ -334,7 +334,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.3</div>
+    <div class="version-tag">v2.4</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -353,14 +353,13 @@
                 </div>
             </div>
             <div class="controls">
-                <button class="control-btn primary" id="startBtn">Start Camera</button>
                 <label class="control-btn" id="loadMaskLabel">
                     Load Mask
                     <input type="file" id="loadMaskInput" accept=".json" style="display:none">
                 </label>
                 <button class="control-btn" id="clearMaskBtn" style="display:none">Clear Mask</button>
             </div>
-            <div class="status" id="trackStatus">Ready - Tap "Start Camera" to begin</div>
+            <div class="status" id="trackStatus">Initializing...</div>
         </div>
 
         <!-- Capture/Create Mask View -->
@@ -487,6 +486,10 @@
                 startCaptureCamera();
             } else {
                 stopCaptureCamera();
+                // Restart face tracking when returning to track view
+                if (faceLandmarker && !isTracking) {
+                    startTracking();
+                }
             }
         }
 
@@ -514,9 +517,11 @@
                 outputFacialTransformationMatrixes: false
             });
 
-            updateStatus('track', 'Model loaded - Ready to start');
-            document.getElementById('startBtn').disabled = false;
+            updateStatus('track', 'Model loaded - Starting camera...');
             hideLoading();
+
+            // Auto-start tracking
+            startTracking();
         }
 
         async function startTracking() {
@@ -540,8 +545,6 @@
 
                 hideLoading();
                 isTracking = true;
-                document.getElementById('startBtn').textContent = 'Stop Camera';
-                document.getElementById('startBtn').classList.add('active');
                 updateStatus('track', 'Face tracking active');
 
                 detectFaces();
@@ -565,9 +568,6 @@
             if (trackCtx) {
                 trackCtx.clearRect(0, 0, trackCanvas.width, trackCanvas.height);
             }
-            document.getElementById('startBtn').textContent = 'Start Camera';
-            document.getElementById('startBtn').classList.remove('active');
-            updateStatus('track', 'Camera stopped');
         }
 
         function resizeTrackCanvas() {
@@ -1443,14 +1443,6 @@
         // EVENT HANDLERS
         // ============================================
 
-        document.getElementById('startBtn').addEventListener('click', () => {
-            if (isTracking) {
-                stopTracking();
-            } else {
-                startTracking();
-            }
-        });
-
         document.getElementById('loadMaskInput').addEventListener('change', (e) => {
             if (e.target.files && e.target.files[0]) {
                 loadMaskFile(e.target.files[0]);
@@ -1502,7 +1494,6 @@
         // ============================================
 
         window.addEventListener('load', async () => {
-            document.getElementById('startBtn').disabled = true;
             showLoading('Loading face detection...');
 
             try {
