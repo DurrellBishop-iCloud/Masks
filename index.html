@@ -323,6 +323,73 @@
             background: #e67e22;
         }
 
+        /* Gallery Overlay */
+        .gallery-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a2e;
+            z-index: 150;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gallery-overlay.hidden {
+            display: none;
+        }
+
+        .gallery-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: #0f0f1a;
+            font-weight: 600;
+        }
+
+        .gallery-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            padding: 12px;
+            overflow-y: auto;
+            align-content: start;
+        }
+
+        .gallery-mask-item {
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            background: #16213e;
+            border: 2px solid transparent;
+            transition: border-color 0.2s, transform 0.1s;
+        }
+
+        .gallery-mask-item:active {
+            transform: scale(0.95);
+        }
+
+        .gallery-mask-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gallery-mask-item:hover {
+            border-color: #e94560;
+        }
+
+        .gallery-loading, .gallery-empty {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #888;
+            padding: 40px;
+        }
+
         /* Edit Mask Overlay */
         .edit-overlay {
             position: absolute;
@@ -415,7 +482,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v2.9</div>
+    <div class="version-tag">v3.0</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -434,12 +501,24 @@
                 </div>
             </div>
             <div class="controls">
+                <button class="control-btn" id="galleryBtn">Choose Mask</button>
                 <label class="control-btn" id="loadMaskLabel">
-                    Load Mask
+                    Load File
                     <input type="file" id="loadMaskInput" accept=".json" style="display:none">
                 </label>
                 <button class="control-btn" id="editMaskBtn" style="display:none">Edit Mask</button>
                 <button class="control-btn" id="clearMaskBtn" style="display:none">Clear Mask</button>
+            </div>
+
+            <!-- Mask Gallery Overlay -->
+            <div class="gallery-overlay hidden" id="galleryOverlay">
+                <div class="gallery-header">
+                    <span>Choose a Mask</span>
+                    <button class="control-btn small" id="closeGalleryBtn">Close</button>
+                </div>
+                <div class="gallery-grid" id="galleryGrid">
+                    <div class="gallery-loading">Loading masks...</div>
+                </div>
             </div>
 
             <!-- Edit Mask Overlay -->
@@ -501,6 +580,7 @@
                 <button class="control-btn" id="retakeBtn">Retake</button>
                 <button class="control-btn" id="addPointsBtn">Add Eye Points</button>
                 <button class="control-btn success" id="saveMaskBtn">Save Mask</button>
+                <button class="control-btn primary" id="publishBtn">Publish to Gallery</button>
             </div>
 
             <div class="points-info hidden" id="pointsInfo">
@@ -570,6 +650,9 @@
         // Loaded mask for face tracking
         let loadedMask = null;  // { image: HTMLImageElement, anchors: { leftEye, rightEye } }
         let maskImage = null;
+
+        // Gallery
+        let galleryManifest = null;
 
         // ============================================
         // TAB NAVIGATION
@@ -1245,6 +1328,154 @@
         }
 
         // ============================================
+        // MASK GALLERY
+        // ============================================
+
+        async function openGallery() {
+            document.getElementById('galleryOverlay').classList.remove('hidden');
+            stopTracking();
+
+            // Load manifest if not cached
+            if (!galleryManifest) {
+                await loadGalleryManifest();
+            }
+
+            renderGallery();
+        }
+
+        function closeGallery() {
+            document.getElementById('galleryOverlay').classList.add('hidden');
+            if (faceLandmarker) {
+                startTracking();
+            }
+        }
+
+        async function loadGalleryManifest() {
+            try {
+                const response = await fetch('masks/manifest.json');
+                galleryManifest = await response.json();
+            } catch (error) {
+                console.error('Failed to load gallery manifest:', error);
+                galleryManifest = { masks: [] };
+            }
+        }
+
+        function renderGallery() {
+            const grid = document.getElementById('galleryGrid');
+
+            if (!galleryManifest || galleryManifest.masks.length === 0) {
+                grid.innerHTML = '<div class="gallery-empty">No masks in gallery yet.<br>Create one and tap "Publish to Gallery"!</div>';
+                return;
+            }
+
+            grid.innerHTML = '';
+
+            galleryManifest.masks.forEach(mask => {
+                const item = document.createElement('div');
+                item.className = 'gallery-mask-item';
+                item.innerHTML = `<img src="${mask.image}" alt="${mask.name}">`;
+                item.addEventListener('click', () => selectGalleryMask(mask));
+                grid.appendChild(item);
+            });
+        }
+
+        async function selectGalleryMask(maskData) {
+            try {
+                // Load the image
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+
+                img.onload = () => {
+                    maskImage = img;
+                    loadedMask = {
+                        width: img.width,
+                        height: img.height,
+                        anchors: maskData.anchors
+                    };
+
+                    document.getElementById('clearMaskBtn').style.display = 'inline-block';
+                    document.getElementById('editMaskBtn').style.display = 'inline-block';
+                    updateStatus('track', `Loaded: ${maskData.name}`);
+
+                    closeGallery();
+                };
+
+                img.onerror = () => {
+                    updateStatus('track', 'Error loading mask image');
+                };
+
+                img.src = maskData.image;
+
+            } catch (error) {
+                console.error('Error selecting mask:', error);
+            }
+        }
+
+        // ============================================
+        // PUBLISH TO GALLERY
+        // ============================================
+
+        function publishToGallery() {
+            if (!eyePoints.left || !eyePoints.right) {
+                updateStatus('capture', 'Please add eye points before publishing');
+                return;
+            }
+
+            // Redraw canvas WITHOUT markers
+            if (currentMaskData) {
+                previewCtx.putImageData(currentMaskData, 0, 0);
+            }
+
+            // Generate a unique ID
+            const maskId = 'mask-' + Date.now();
+            const maskName = prompt('Enter a name for this mask:', 'My Mask');
+
+            if (!maskName) {
+                drawEyePointMarkers();
+                return;
+            }
+
+            // Create the PNG
+            const imageDataUrl = previewCanvas.toDataURL('image/png');
+
+            // Download the PNG file
+            const pngLink = document.createElement('a');
+            pngLink.download = maskId + '.png';
+            pngLink.href = imageDataUrl;
+            pngLink.click();
+
+            // Create manifest entry
+            const manifestEntry = {
+                id: maskId,
+                name: maskName,
+                image: `masks/images/${maskId}.png`,
+                anchors: {
+                    leftEye: {
+                        x: eyePoints.left.x / previewCanvas.width,
+                        y: eyePoints.left.y / previewCanvas.height
+                    },
+                    rightEye: {
+                        x: eyePoints.right.x / previewCanvas.width,
+                        y: eyePoints.right.y / previewCanvas.height
+                    }
+                }
+            };
+
+            // Download the manifest entry as JSON
+            const jsonBlob = new Blob([JSON.stringify(manifestEntry, null, 2)], { type: 'application/json' });
+            const jsonLink = document.createElement('a');
+            jsonLink.download = maskId + '-manifest-entry.json';
+            jsonLink.href = URL.createObjectURL(jsonBlob);
+            setTimeout(() => jsonLink.click(), 500);
+            URL.revokeObjectURL(jsonLink.href);
+
+            // Redraw markers
+            drawEyePointMarkers();
+
+            updateStatus('capture', `Published! Add ${maskId}.png to masks/images/ and merge the JSON into manifest.json`);
+        }
+
+        // ============================================
         // CAPTURE / CREATE MASK
         // ============================================
 
@@ -1891,6 +2122,13 @@
         });
 
         document.getElementById('clearMaskBtn').addEventListener('click', clearLoadedMask);
+
+        // Gallery
+        document.getElementById('galleryBtn').addEventListener('click', openGallery);
+        document.getElementById('closeGalleryBtn').addEventListener('click', closeGallery);
+
+        // Publish
+        document.getElementById('publishBtn').addEventListener('click', publishToGallery);
 
         // Edit Mask event handlers
         document.getElementById('editMaskBtn').addEventListener('click', openEditMask);
