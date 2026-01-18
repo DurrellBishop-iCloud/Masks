@@ -483,7 +483,7 @@
     </style>
 </head>
 <body>
-    <div class="version-tag">v3.3</div>
+    <div class="version-tag">v3.4</div>
     <div class="container">
         <!-- Tab Navigation -->
         <div class="tabs">
@@ -1404,10 +1404,8 @@
             document.getElementById('galleryOverlay').classList.remove('hidden');
             stopTracking();
 
-            // Load manifest if not cached
-            if (!galleryManifest) {
-                await loadGalleryManifest();
-            }
+            // Always reload manifest to get latest masks
+            await loadGalleryManifest();
 
             renderGallery();
         }
@@ -1421,7 +1419,8 @@
 
         async function loadGalleryManifest() {
             try {
-                const response = await fetch('masks/manifest.json');
+                // Add cache-busting to always get latest
+                const response = await fetch('masks/manifest.json?t=' + Date.now());
                 galleryManifest = await response.json();
             } catch (error) {
                 console.error('Failed to load gallery manifest:', error);
