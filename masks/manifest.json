@@ -2,21 +2,6 @@
   "version": 1,
   "masks": [
     {
-      "id": "mask-1768744272147",
-      "name": "Book mask2",
-      "image": "masks/images/mask-1768744272147.png",
-      "anchors": {
-        "leftEye": {
-          "x": 0.39459815546772065,
-          "y": 0.6264822134387351
-        },
-        "rightEye": {
-          "x": 0.6018884497145367,
-          "y": 0.624505928853755
-        }
-      }
-    },
-    {
       "id": "mask-1768744886672",
       "name": "Street",
       "image": "masks/images/mask-1768744886672.png",
