@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 60">
+  <defs>
+    <radialGradient id="noseGrad" cx="35%" cy="35%" r="60%">
+      <stop offset="0%" style="stop-color:#ff6b6b"/>
+      <stop offset="100%" style="stop-color:#c0392b"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Main nose sphere -->
+  <circle cx="30" cy="30" r="25"
+          fill="url(#noseGrad)"
+          stroke="#a93226"
+          stroke-width="2"/>
+
+  <!-- Highlight -->
+  <ellipse cx="22" cy="22" rx="8" ry="6"
+           fill="rgba(255,255,255,0.3)"/>
+
+  <!-- Secondary highlight -->
+  <circle cx="20" cy="20" r="3"
+          fill="rgba(255,255,255,0.5)"/>
+</svg>

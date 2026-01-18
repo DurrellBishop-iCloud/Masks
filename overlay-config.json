@@ -1,0 +1,97 @@
+{
+  "overlays": [
+    {
+      "id": "glasses-aviator",
+      "name": "Aviator Glasses",
+      "file": "overlays/aviator-glasses.svg",
+      "anchorType": "eyes",
+      "referenceWidth": 2.5,
+      "offset": { "x": 0, "y": 0 },
+      "scaleMultiplier": 1.0,
+      "transformOrigin": "center center"
+    },
+    {
+      "id": "mask-superhero",
+      "name": "Superhero Mask",
+      "file": "overlays/superhero-mask.png",
+      "anchorType": "eyes",
+      "referenceWidth": 2.8,
+      "offset": { "x": 0, "y": 0.1 },
+      "scaleMultiplier": 1.1,
+      "transformOrigin": "center center"
+    },
+    {
+      "id": "mask-full-cat",
+      "name": "Cat Face Mask",
+      "file": "overlays/cat-mask.png",
+      "anchorType": "fullface",
+      "referenceWidth": 4.0,
+      "offset": { "x": 0, "y": 0.3 },
+      "scaleMultiplier": 1.0,
+      "transformOrigin": "center center"
+    },
+    {
+      "id": "moustache-handlebar",
+      "name": "Handlebar Moustache",
+      "file": "overlays/handlebar-moustache.svg",
+      "anchorType": "mouth",
+      "referenceWidth": 1.8,
+      "offset": { "x": 0, "y": -0.15 },
+      "scaleMultiplier": 1.0,
+      "transformOrigin": "center center"
+    },
+    {
+      "id": "hair-afro",
+      "name": "Afro Hair",
+      "file": "overlays/afro-hair.png",
+      "anchorType": "forehead",
+      "referenceWidth": 3.5,
+      "offset": { "x": 0, "y": -1.8 },
+      "scaleMultiplier": 1.2,
+      "transformOrigin": "center bottom"
+    },
+    {
+      "id": "hat-crown",
+      "name": "Royal Crown",
+      "file": "overlays/crown.svg",
+      "anchorType": "forehead",
+      "referenceWidth": 2.5,
+      "offset": { "x": 0, "y": -1.5 },
+      "scaleMultiplier": 1.0,
+      "transformOrigin": "center bottom"
+    }
+  ],
+  "anchorTypes": {
+    "eyes": {
+      "description": "Anchors to eye outer corners - for glasses, eye masks, domino masks",
+      "landmarks": { "left": 33, "right": 263 },
+      "defaultOffset": { "x": 0, "y": 0 },
+      "defaultScale": 2.5
+    },
+    "mouth": {
+      "description": "Anchors to mouth corners - for moustaches, beards, lip overlays",
+      "landmarks": { "left": 61, "right": 291 },
+      "defaultOffset": { "x": 0, "y": -0.1 },
+      "defaultScale": 1.8
+    },
+    "forehead": {
+      "description": "Anchors above eyes - for hair, hats, crowns, horns",
+      "landmarks": { "left": 33, "right": 263 },
+      "defaultOffset": { "x": 0, "y": -1.5 },
+      "defaultScale": 3.0
+    },
+    "fullface": {
+      "description": "Anchors to cover full face - for animal masks, character faces",
+      "landmarks": { "left": 33, "right": 263 },
+      "defaultOffset": { "x": 0, "y": 0.5 },
+      "defaultScale": 4.0
+    }
+  },
+  "notes": {
+    "referenceWidth": "Width in 'eye distance' units - 1.0 = inter-ocular distance",
+    "offset": "x/y offset in eye-distance units. Negative y = up, positive = down",
+    "scaleMultiplier": "Additional scale factor on top of automatic face-size scaling",
+    "transformOrigin": "CSS transform-origin for rotation pivot point",
+    "fileFormats": "PNG with transparency or SVG recommended. Eye holes should align with anchor points."
+  }
+}

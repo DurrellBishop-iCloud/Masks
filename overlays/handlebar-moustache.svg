@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 50">
+  <defs>
+    <linearGradient id="stacheGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#4a3728"/>
+      <stop offset="100%" style="stop-color:#2d1f14"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Main moustache body -->
+  <path d="M 90 8
+           C 70 8 55 12 45 18
+           C 30 26 15 28 5 22
+           C 0 18 0 25 5 30
+           C 15 38 30 35 45 28
+           C 55 23 70 20 90 22
+           C 110 20 125 23 135 28
+           C 150 35 165 38 175 30
+           C 180 25 180 18 175 22
+           C 165 28 150 26 135 18
+           C 125 12 110 8 90 8 Z"
+        fill="url(#stacheGrad)"
+        stroke="#1a0f08"
+        stroke-width="1"/>
+
+  <!-- Curl details left -->
+  <path d="M 5 26 Q 0 28 2 32 Q 8 35 12 30"
+        fill="none"
+        stroke="#1a0f08"
+        stroke-width="1"/>
+
+  <!-- Curl details right -->
+  <path d="M 175 26 Q 180 28 178 32 Q 172 35 168 30"
+        fill="none"
+        stroke="#1a0f08"
+        stroke-width="1"/>
+
+  <!-- Center hair texture -->
+  <path d="M 80 15 Q 90 12 100 15" stroke="#1a0f08" stroke-width="0.5" fill="none"/>
+  <path d="M 75 18 Q 90 14 105 18" stroke="#1a0f08" stroke-width="0.5" fill="none"/>
+</svg>

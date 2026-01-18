@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80">
+  <defs>
+    <linearGradient id="frameGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff69b4"/>
+      <stop offset="50%" style="stop-color:#ff1493"/>
+      <stop offset="100%" style="stop-color:#c71585"/>
+    </linearGradient>
+    <linearGradient id="lensGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#87ceeb;stop-opacity:0.4"/>
+      <stop offset="100%" style="stop-color:#4169e1;stop-opacity:0.6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left star lens -->
+  <polygon points="60,5 68,28 95,28 73,42 82,68 60,52 38,68 47,42 25,28 52,28"
+           fill="url(#lensGrad2)"
+           stroke="url(#frameGrad)"
+           stroke-width="4"/>
+
+  <!-- Right star lens -->
+  <polygon points="180,5 188,28 215,28 193,42 202,68 180,52 158,68 167,42 145,28 172,28"
+           fill="url(#lensGrad2)"
+           stroke="url(#frameGrad)"
+           stroke-width="4"/>
+
+  <!-- Bridge -->
+  <path d="M 95 38 Q 120 32 145 38"
+        stroke="url(#frameGrad)"
+        stroke-width="4"
+        fill="none"/>
+
+  <!-- Left temple -->
+  <line x1="25" y1="35" x2="5" y2="30"
+        stroke="url(#frameGrad)"
+        stroke-width="4"
+        stroke-linecap="round"/>
+
+  <!-- Right temple -->
+  <line x1="215" y1="35" x2="235" y2="30"
+        stroke="url(#frameGrad)"
+        stroke-width="4"
+        stroke-linecap="round"/>
+</svg>

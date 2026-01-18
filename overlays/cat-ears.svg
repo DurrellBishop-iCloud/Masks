@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 80">
+  <defs>
+    <linearGradient id="earGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#4a4a4a"/>
+      <stop offset="100%" style="stop-color:#2a2a2a"/>
+    </linearGradient>
+    <linearGradient id="innerEarGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" style="stop-color:#ffb6c1"/>
+      <stop offset="100%" style="stop-color:#ff69b4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Left ear outer -->
+  <path d="M 25 75 L 5 15 Q 10 5 25 10 L 55 65 Q 45 80 25 75 Z"
+        fill="url(#earGrad)"
+        stroke="#1a1a1a"
+        stroke-width="2"/>
+
+  <!-- Left ear inner -->
+  <path d="M 28 65 L 15 25 Q 18 18 28 22 L 45 58 Q 40 68 28 65 Z"
+        fill="url(#innerEarGrad)"/>
+
+  <!-- Right ear outer -->
+  <path d="M 175 75 L 195 15 Q 190 5 175 10 L 145 65 Q 155 80 175 75 Z"
+        fill="url(#earGrad)"
+        stroke="#1a1a1a"
+        stroke-width="2"/>
+
+  <!-- Right ear inner -->
+  <path d="M 172 65 L 185 25 Q 182 18 172 22 L 155 58 Q 160 68 172 65 Z"
+        fill="url(#innerEarGrad)"/>
+</svg>

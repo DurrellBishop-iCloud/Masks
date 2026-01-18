@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 280">
+  <defs>
+    <linearGradient id="furGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#d4a574"/>
+      <stop offset="100%" style="stop-color:#b8956e"/>
+    </linearGradient>
+    <linearGradient id="darkFurGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b6914"/>
+      <stop offset="100%" style="stop-color:#654321"/>
+    </linearGradient>
+    <radialGradient id="noseGrad2" cx="30%" cy="30%">
+      <stop offset="0%" style="stop-color:#444"/>
+      <stop offset="100%" style="stop-color:#111"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Left ear -->
+  <ellipse cx="50" cy="60" rx="45" ry="70"
+           fill="url(#darkFurGrad)"
+           stroke="#4a3520"
+           stroke-width="2"
+           transform="rotate(-20, 50, 60)"/>
+
+  <!-- Right ear -->
+  <ellipse cx="250" cy="60" rx="45" ry="70"
+           fill="url(#darkFurGrad)"
+           stroke="#4a3520"
+           stroke-width="2"
+           transform="rotate(20, 250, 60)"/>
+
+  <!-- Main face -->
+  <ellipse cx="150" cy="150" rx="130" ry="120"
+           fill="url(#furGrad)"
+           stroke="#8b6914"
+           stroke-width="3"/>
+
+  <!-- Forehead patch -->
+  <ellipse cx="150" cy="80" rx="50" ry="40"
+           fill="url(#darkFurGrad)"/>
+
+  <!-- Left eye area (white) -->
+  <ellipse cx="100" cy="120" rx="35" ry="30"
+           fill="white"
+           stroke="#ccc"
+           stroke-width="1"/>
+
+  <!-- Right eye area (white) -->
+  <ellipse cx="200" cy="120" rx="35" ry="30"
+           fill="white"
+           stroke="#ccc"
+           stroke-width="1"/>
+
+  <!-- Left eye hole (transparent) -->
+  <ellipse cx="100" cy="120" rx="22" ry="18"
+           fill="transparent"
+           stroke="#333"
+           stroke-width="2"/>
+
+  <!-- Right eye hole (transparent) -->
+  <ellipse cx="200" cy="120" rx="22" ry="18"
+           fill="transparent"
+           stroke="#333"
+           stroke-width="2"/>
+
+  <!-- Muzzle -->
+  <ellipse cx="150" cy="200" rx="60" ry="50"
+           fill="#f5deb3"
+           stroke="#deb887"
+           stroke-width="2"/>
+
+  <!-- Nose -->
+  <ellipse cx="150" cy="175" rx="25" ry="20"
+           fill="url(#noseGrad2)"
+           stroke="#000"
+           stroke-width="1"/>
+
+  <!-- Nose highlight -->
+  <ellipse cx="142" cy="170" rx="8" ry="5"
+           fill="rgba(255,255,255,0.2)"/>
+
+  <!-- Mouth line -->
+  <path d="M 150 195 L 150 215"
+        stroke="#8b4513"
+        stroke-width="3"
+        stroke-linecap="round"/>
+
+  <path d="M 120 220 Q 150 235 180 220"
+        stroke="#8b4513"
+        stroke-width="3"
+        fill="none"
+        stroke-linecap="round"/>
+
+  <!-- Tongue -->
+  <ellipse cx="150" cy="245" rx="20" ry="25"
+           fill="#ff6b6b"
+           stroke="#cc5555"
+           stroke-width="1"/>
+
+  <!-- Tongue line -->
+  <line x1="150" y1="230" x2="150" y2="260"
+        stroke="#cc5555"
+        stroke-width="2"/>
+</svg>
