@@ -698,133 +698,118 @@
         function removeBackground(autoTune = false) {
             if (!originalImageData) return;
 
-            if (autoTune) {
-                updateStatus('capture', 'Auto-tuning tolerance...');
-                autoTuneAndRemove();
-                return;
-            }
+            updateStatus('capture', 'Analyzing paper colors...');
 
-            const tolerance = parseInt(document.getElementById('toleranceSlider').value);
-            const result = doFloodFill(tolerance);
+            const width = originalImageData.width;
+            const height = originalImageData.height;
+            const srcData = originalImageData.data;
 
-            previewCtx.putImageData(result.imageData, 0, 0);
+            // Step 1: Sample ALL edge pixels to understand paper color range
+            const edgeColors = [];
 
-            document.getElementById('saveMaskBtn').classList.remove('hidden');
-            updateStatus('capture', `Done! Tolerance: ${tolerance}, Edge pixels remaining: ${result.edgeOpaqueCount}`);
-        }
-
-        function autoTuneAndRemove() {
-            const minTol = 10;
-            const maxTol = 200;
-            const step = 10;
-            const maxEdgePixelsAllowed = 50; // Allow tiny bit of noise
-
-            let bestTolerance = minTol;
-            let bestResult = null;
-
-            for (let tol = minTol; tol <= maxTol; tol += step) {
-                const result = doFloodFill(tol);
-
-                // Check if edges are clean enough
-                if (result.edgeOpaqueCount <= maxEdgePixelsAllowed) {
-                    bestTolerance = tol;
-                    bestResult = result;
-                    break;
-                }
-
-                // Keep track in case we never get clean edges
-                if (!bestResult || result.edgeOpaqueCount < bestResult.edgeOpaqueCount) {
-                    bestTolerance = tol;
-                    bestResult = result;
-                }
-            }
-
-            // Update slider to show what we found
-            document.getElementById('toleranceSlider').value = bestTolerance;
-            document.getElementById('toleranceValue').textContent = bestTolerance;
-
-            previewCtx.putImageData(bestResult.imageData, 0, 0);
-
-            document.getElementById('saveMaskBtn').classList.remove('hidden');
-            updateStatus('capture', `Auto-tuned! Tolerance: ${bestTolerance}, Edge pixels: ${bestResult.edgeOpaqueCount}`);
-        }
-
-        function doFloodFill(tolerance) {
-            // Clone original data
-            const imageData = new ImageData(
-                new Uint8ClampedArray(originalImageData.data),
-                originalImageData.width,
-                originalImageData.height
-            );
-
-            const data = imageData.data;
-            const width = imageData.width;
-            const height = imageData.height;
-
-            // Sample background color from corners
-            const bgColor = sampleBackgroundColor(originalImageData.data, width, height);
-
-            // Create visited array for flood fill
-            const visited = new Uint8Array(width * height);
-
-            // Flood fill from all edges using a more efficient approach
-            const queue = [];
-
-            // Add edge pixels to queue
+            // Top row
             for (let x = 0; x < width; x++) {
-                queue.push(x); // top row: y=0
-                queue.push((height - 1) * width + x); // bottom row
+                const idx = x * 4;
+                edgeColors.push({ r: srcData[idx], g: srcData[idx + 1], b: srcData[idx + 2] });
+            }
+            // Bottom row
+            for (let x = 0; x < width; x++) {
+                const idx = ((height - 1) * width + x) * 4;
+                edgeColors.push({ r: srcData[idx], g: srcData[idx + 1], b: srcData[idx + 2] });
+            }
+            // Left column (excluding corners)
+            for (let y = 1; y < height - 1; y++) {
+                const idx = (y * width) * 4;
+                edgeColors.push({ r: srcData[idx], g: srcData[idx + 1], b: srcData[idx + 2] });
+            }
+            // Right column (excluding corners)
+            for (let y = 1; y < height - 1; y++) {
+                const idx = (y * width + width - 1) * 4;
+                edgeColors.push({ r: srcData[idx], g: srcData[idx + 1], b: srcData[idx + 2] });
+            }
+
+            // Step 2: Calculate mean color of edges
+            let avgR = 0, avgG = 0, avgB = 0;
+            edgeColors.forEach(c => {
+                avgR += c.r;
+                avgG += c.g;
+                avgB += c.b;
+            });
+            avgR = Math.round(avgR / edgeColors.length);
+            avgG = Math.round(avgG / edgeColors.length);
+            avgB = Math.round(avgB / edgeColors.length);
+
+            // Step 3: Find the maximum color distance among edge pixels
+            // This tells us how much the paper color varies (shadows, lighting)
+            let maxEdgeDistance = 0;
+            edgeColors.forEach(c => {
+                const dist = colorDistance(c.r, c.g, c.b, avgR, avgG, avgB);
+                if (dist > maxEdgeDistance) maxEdgeDistance = dist;
+            });
+
+            // Step 4: Set tolerance slightly above max edge variance
+            // Add a margin to handle slight variations
+            const autoTolerance = Math.round(maxEdgeDistance * 1.2) + 10;
+
+            // Update slider to show computed value
+            document.getElementById('toleranceSlider').value = Math.min(autoTolerance, 150);
+            document.getElementById('toleranceValue').textContent = Math.min(autoTolerance, 150);
+
+            const tolerance = autoTune ? autoTolerance : parseInt(document.getElementById('toleranceSlider').value);
+
+            updateStatus('capture', `Paper variance: ${Math.round(maxEdgeDistance)}, using tolerance: ${tolerance}`);
+
+            // Step 5: Do the flood fill with computed tolerance
+            const imageData = new ImageData(
+                new Uint8ClampedArray(srcData),
+                width,
+                height
+            );
+            const data = imageData.data;
+
+            const visited = new Uint8Array(width * height);
+            const queue = [];
+            let head = 0;
+
+            // Add all edge pixels to queue
+            for (let x = 0; x < width; x++) {
+                queue.push(x);
+                queue.push((height - 1) * width + x);
             }
             for (let y = 1; y < height - 1; y++) {
-                queue.push(y * width); // left column
-                queue.push(y * width + width - 1); // right column
+                queue.push(y * width);
+                queue.push(y * width + width - 1);
             }
 
-            // Flood fill using index-based queue (faster)
-            let head = 0;
+            // Flood fill
             while (head < queue.length) {
                 const idx = queue[head++];
-
                 if (visited[idx]) continue;
+                visited[idx] = 1;
 
                 const x = idx % width;
                 const y = Math.floor(idx / width);
-
-                if (x < 0 || x >= width || y < 0 || y >= height) continue;
 
                 const pixelIdx = idx * 4;
                 const r = data[pixelIdx];
                 const g = data[pixelIdx + 1];
                 const b = data[pixelIdx + 2];
 
-                // Check if pixel is similar to background
-                if (colorDistance(r, g, b, bgColor.r, bgColor.g, bgColor.b) <= tolerance) {
-                    visited[idx] = 1;
+                // Check if pixel is within paper color range
+                if (colorDistance(r, g, b, avgR, avgG, avgB) <= tolerance) {
                     data[pixelIdx + 3] = 0; // Make transparent
 
-                    // Add neighbors (bounds checking done at start of loop)
-                    if (x > 0) queue.push(idx - 1);
-                    if (x < width - 1) queue.push(idx + 1);
-                    if (y > 0) queue.push(idx - width);
-                    if (y < height - 1) queue.push(idx + width);
+                    // Add neighbors
+                    if (x > 0 && !visited[idx - 1]) queue.push(idx - 1);
+                    if (x < width - 1 && !visited[idx + 1]) queue.push(idx + 1);
+                    if (y > 0 && !visited[idx - width]) queue.push(idx - width);
+                    if (y < height - 1 && !visited[idx + width]) queue.push(idx + width);
                 }
             }
 
-            // Count opaque pixels remaining on edges
-            let edgeOpaqueCount = 0;
-
-            // Top and bottom rows
-            for (let x = 0; x < width; x++) {
-                if (data[x * 4 + 3] > 0) edgeOpaqueCount++;
-                if (data[((height - 1) * width + x) * 4 + 3] > 0) edgeOpaqueCount++;
-            }
-            // Left and right columns (excluding corners already counted)
-            for (let y = 1; y < height - 1; y++) {
-                if (data[(y * width) * 4 + 3] > 0) edgeOpaqueCount++;
-                if (data[(y * width + width - 1) * 4 + 3] > 0) edgeOpaqueCount++;
-            }
-
-            return { imageData, edgeOpaqueCount };
+            previewCtx.putImageData(imageData, 0, 0);
+            document.getElementById('saveMaskBtn').classList.remove('hidden');
+            updateStatus('capture', `Done! Paper avg: rgb(${avgR},${avgG},${avgB}), variance: ${Math.round(maxEdgeDistance)}, tolerance: ${tolerance}`);
         }
 
         function sampleBackgroundColor(data, width, height) {
