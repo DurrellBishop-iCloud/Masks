@@ -536,7 +536,7 @@
 </head>
 <body>
     <button class="gear-btn" id="gearBtn">&#9881;</button>
-    <div class="version-tag">v4.8</div>
+    <div class="version-tag">v4.9</div>
     <div id="debugInfo" style="position:fixed;bottom:10px;left:10px;background:rgba(0,0,0,0.8);color:#0f0;font-family:monospace;font-size:12px;padding:10px;z-index:9999;max-width:90%;"></div>
     <div class="container ui-hidden">
         <!-- Tab Navigation -->
@@ -1641,35 +1641,42 @@
         }
 
         async function selectGalleryMask(maskData) {
-            try {
-                // Load the image
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
+            return new Promise((resolve, reject) => {
+                try {
+                    const img = new Image();
+                    img.crossOrigin = 'anonymous';
 
-                img.onload = () => {
-                    maskImage = img;
-                    loadedMask = {
-                        width: img.width,
-                        height: img.height,
-                        anchors: maskData.anchors
+                    img.onload = () => {
+                        maskImage = img;
+                        loadedMask = {
+                            width: img.width,
+                            height: img.height,
+                            anchors: maskData.anchors
+                        };
+
+                        document.getElementById('clearMaskBtn').style.display = 'inline-block';
+                        document.getElementById('editMaskBtn').style.display = 'inline-block';
+
+                        // Only close gallery if it's open
+                        if (!document.getElementById('galleryOverlay').classList.contains('hidden')) {
+                            closeGallery();
+                        }
+
+                        resolve();
                     };
 
-                    document.getElementById('clearMaskBtn').style.display = 'inline-block';
-                    document.getElementById('editMaskBtn').style.display = 'inline-block';
-                    updateStatus('track', `Loaded: ${maskData.name}`);
+                    img.onerror = (err) => {
+                        debug('IMG ERROR: ' + maskData.image);
+                        reject(err);
+                    };
 
-                    closeGallery();
-                };
+                    img.src = maskData.image;
 
-                img.onerror = () => {
-                    updateStatus('track', 'Error loading mask image');
-                };
-
-                img.src = maskData.image;
-
-            } catch (error) {
-                console.error('Error selecting mask:', error);
-            }
+                } catch (error) {
+                    debug('CATCH ERROR: ' + error.message);
+                    reject(error);
+                }
+            });
         }
 
         // ============================================
@@ -2737,8 +2744,12 @@
 
             const mask = galleryManifest.masks[currentMaskIndex];
             debug('Loading: ' + (mask ? mask.name : 'undefined'));
-            await selectGalleryMask(mask);
-            debug('Done loading');
+            try {
+                await selectGalleryMask(mask);
+                debug('Done loading');
+            } catch (err) {
+                debug('LOAD FAILED: ' + err);
+            }
         });
 
         // Load a random mask from the gallery
