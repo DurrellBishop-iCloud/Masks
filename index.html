@@ -779,20 +779,27 @@
         function cutHoleAtPoint(canvasX, canvasY) {
             if (!previewCanvas || !previewCtx) return;
 
+            const tolerance = parseInt(document.getElementById('toleranceSlider').value);
             const imageData = previewCtx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
             const data = imageData.data;
             const width = previewCanvas.width;
             const height = previewCanvas.height;
 
-            // Check if tapped pixel is opaque
             const startIdx = Math.floor(canvasY) * width + Math.floor(canvasX);
             if (startIdx < 0 || startIdx >= width * height) return;
-            if (data[startIdx * 4 + 3] === 0) {
-                updateStatus('capture', 'Tap on the colored area to cut a hole');
+
+            // Get the color at tap point
+            const tapR = data[startIdx * 4];
+            const tapG = data[startIdx * 4 + 1];
+            const tapB = data[startIdx * 4 + 2];
+            const tapA = data[startIdx * 4 + 3];
+
+            if (tapA === 0) {
+                updateStatus('capture', 'Tap on a visible area to cut a hole');
                 return;
             }
 
-            // Flood fill from tap point to make transparent
+            // Flood fill from tap point, only filling pixels similar to tapped color
             const visited = new Uint8Array(width * height);
             const queue = [startIdx];
             let head = 0;
@@ -803,8 +810,15 @@
                 if (visited[idx]) continue;
                 visited[idx] = 1;
 
-                // Only fill opaque pixels
+                // Skip transparent pixels
                 if (data[idx * 4 + 3] === 0) continue;
+
+                // Check color similarity to tapped color
+                const r = data[idx * 4];
+                const g = data[idx * 4 + 1];
+                const b = data[idx * 4 + 2];
+
+                if (colorDistance(r, g, b, tapR, tapG, tapB) > tolerance) continue;
 
                 // Make transparent
                 data[idx * 4 + 3] = 0;
@@ -821,7 +835,7 @@
             }
 
             previewCtx.putImageData(imageData, 0, 0);
-            updateStatus('capture', `Cut hole (${filledCount} pixels). Tap again to cut more, or Save.`);
+            updateStatus('capture', `Cut hole (${filledCount} pixels). Tap again or Save.`);
         }
 
         function doFloodFillWithTolerance(srcData, width, height, avgR, avgG, avgB, tolerance) {
