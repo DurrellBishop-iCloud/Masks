@@ -497,21 +497,6 @@
       }
     },
     {
-      "id": "mask-1769001250513",
-      "name": "My Mask",
-      "image": "masks/images/mask-1769001250513.png",
-      "anchors": {
-        "leftEye": {
-          "x": 0.6405357927097057,
-          "y": 0.32411067193675885
-        },
-        "rightEye": {
-          "x": 0.5746268656716418,
-          "y": 0.32603087148541693
-        }
-      }
-    },
-    {
       "id": "mask-1769001267745",
       "name": "My Mask",
       "image": "masks/images/mask-1769001267745.png",
